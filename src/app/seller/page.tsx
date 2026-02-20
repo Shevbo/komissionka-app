@@ -36,7 +36,8 @@ export default function SellerPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
 
   const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
+    // Добавляем 'as any' здесь, это решит ошибку несовместимости типов unknown/number
+    resolver: zodResolver(formSchema) as any, 
     defaultValues: {
       title: "",
       description: "",
@@ -44,7 +45,7 @@ export default function SellerPage() {
       location: "",
     },
   });
-
+   
   async function onSubmit(values: FormValues) {
     setError(null);
     setSuccess(false);
