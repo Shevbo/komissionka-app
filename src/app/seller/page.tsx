@@ -26,7 +26,12 @@ const formSchema = z.object({
   location: z.string().default(""),
 });
 
-type FormValues = z.infer<typeof formSchema>;
+interface FormValues {
+  title: string;
+  description: string;
+  price: number;
+  location: string;
+}
 
 const BUCKET = "item-photos";
 
@@ -36,8 +41,7 @@ export default function SellerPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
 
   const form = useForm<FormValues>({
-    // Добавляем 'as any' здесь, это решит ошибку несовместимости типов unknown/number
-    resolver: zodResolver(formSchema) as any, 
+    resolver: zodResolver(formSchema) as any,
     defaultValues: {
       title: "",
       description: "",
