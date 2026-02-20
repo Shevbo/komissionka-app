@@ -69,6 +69,7 @@ export function ItemChat({ itemId }: Props) {
       .subscribe();
 
     return () => {
+      channel.unsubscribe();
       supabase.removeChannel(channel);
     };
   }, [itemId, supabase]);

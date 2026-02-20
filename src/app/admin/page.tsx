@@ -111,6 +111,7 @@ export default function AdminPage() {
     });
 
     return () => {
+      channel.unsubscribe();
       supabase.removeChannel(channel);
     };
   }, [supabase]);

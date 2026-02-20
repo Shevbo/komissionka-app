@@ -62,6 +62,7 @@ export function CatalogGrid({
       .subscribe();
 
     return () => {
+      channel.unsubscribe();
       supabase.removeChannel(channel);
     };
   }, [supabase]);
