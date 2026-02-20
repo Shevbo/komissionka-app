@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "komiss/components/ui/button";
 import { AuthDialog } from "komiss/components/AuthDialog";
@@ -7,6 +8,19 @@ import { useAuth } from "komiss/components/auth-provider";
 
 export function Navbar() {
   const { user, profile, loading, authDialogOpen, setAuthDialogOpen } = useAuth();
+  const [loadingTimedOut, setLoadingTimedOut] = useState(false);
+
+  useEffect(() => {
+    if (!loading) return;
+    const timer = setTimeout(() => setLoadingTimedOut(true), 3000);
+    return () => clearTimeout(timer);
+  }, [loading]);
+
+  useEffect(() => {
+    if (!loading) setLoadingTimedOut(false);
+  }, [loading]);
+
+  const showSkeleton = loading && !loadingTimedOut;
 
   const displayName =
     profile?.full_name ??
@@ -30,7 +44,7 @@ export function Navbar() {
             Комиссионка
           </Link>
           <div className="flex items-center gap-3">
-            {loading ? (
+            {showSkeleton ? (
               <div className="h-9 w-20 animate-pulse rounded-md bg-muted" />
             ) : user ? (
               <>

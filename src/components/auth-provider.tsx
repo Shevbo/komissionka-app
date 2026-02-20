@@ -35,18 +35,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase]);
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      setUser(user);
-      if (user) await fetchProfile();
-      else setProfile(null);
-      setLoading(false);
+    let cancelled = false;
+
+    supabase.auth.getUser().then(
+      async ({ data: { user } }) => {
+        if (cancelled) return;
+        setUser(user);
+        if (user) await fetchProfile();
+        else setProfile(null);
+      },
+      () => {
+        if (!cancelled) setUser(null);
+      }
+    ).finally(() => {
+      if (!cancelled) setLoading(false);
     });
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (cancelled) return;
       setUser(session?.user ?? null);
       if (session?.user) await fetchProfile();
       else setProfile(null);
+      setLoading(false);
     });
-    return () => subscription.unsubscribe();
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, [supabase, fetchProfile]);
 
   const value = useMemo(
