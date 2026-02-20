@@ -54,14 +54,14 @@ export default function SellerPage() {
   });
    
   async function onSubmit(values: FormValues) {
-    setError(null);
-    setSuccess(false);
-
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       setAuthDialogOpen(true);
       return;
     }
+
+    setError(null);
+    setSuccess(false);
     let publicUrl: string | null = null;
 
     try {

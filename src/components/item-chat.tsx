@@ -23,7 +23,6 @@ type Props = {
 export function ItemChat({ itemId }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [authorName, setAuthorName] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +30,7 @@ export function ItemChat({ itemId }: Props) {
   const { profile, setAuthDialogOpen } = useAuth();
   const supabase = useMemo(() => createBrowserClient(), []);
 
-  // Загрузка сообщений
+  // Загрузка сообщений (sender_id ссылается на profiles — чтение не требует авторизации)
   useEffect(() => {
     async function fetchMessages() {
       const { data, error: fetchError } = await supabase
@@ -60,7 +59,7 @@ export function ItemChat({ itemId }: Props) {
           event: "INSERT",
           schema: "public",
           table: "messages",
-          filter: `item_id=eq.${itemId}`,
+          filter: "item_id=eq." + itemId,
         },
         (payload) => {
           const newMsg = payload.new as Message;
@@ -96,7 +95,7 @@ export function ItemChat({ itemId }: Props) {
       return;
     }
 
-    const author = profile?.full_name ?? "Покупатель";
+    const author = profile?.full_name ?? "Анонимный пользователь";
 
     const { error: insertError } = await supabase.from("messages").insert({
       item_id: itemId,
@@ -151,7 +150,7 @@ export function ItemChat({ itemId }: Props) {
                   {msg.content}
                 </p>
                 <div className="mt-1 flex items-center justify-end gap-2 text-xs opacity-90">
-                  <span>{msg.author_name ?? "Покупатель"}</span>
+                  <span>{msg.author_name ?? "Анонимный пользователь"}</span>
                   <span>{formatTime(msg.created_at)}</span>
                 </div>
               </div>
@@ -164,13 +163,6 @@ export function ItemChat({ itemId }: Props) {
         )}
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-          <Input
-            placeholder="Ваше имя (необязательно)"
-            value={authorName}
-            onChange={(e) => setAuthorName(e.target.value)}
-            disabled={sending}
-            className="sm:w-40"
-          />
           <Input
             placeholder="Введите сообщение..."
             value={input}
