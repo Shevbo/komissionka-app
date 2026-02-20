@@ -21,9 +21,9 @@ import Link from "next/link";
 
 const formSchema = z.object({
   title: z.string().min(1, "Введите название"),
-  description: z.string(),
+  description: z.string().default(""),
   price: z.coerce.number().min(0, "Цена не может быть отрицательной"),
-  location: z.string(),
+  location: z.string().default(""),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -165,18 +165,17 @@ export default function SellerPage() {
                       <FormLabel>Цена (₽)</FormLabel>
                       <FormControl>
                         <Input
+                          ref={field.ref}
                           type="number"
                           step="0.01"
-                          min="0"
+                          min={0}
                           placeholder="0"
-                          {...field}
-                          onChange={(e) =>
-                            field.onChange(
-                              e.target.value === ""
-                                ? 0
-                                : Number(e.target.value)
-                            )
-                          }
+                          value={field.value ?? ""}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            field.onChange(val === "" ? 0 : Number(val));
+                          }}
+                          onBlur={field.onBlur}
                         />
                       </FormControl>
                       <FormMessage />
