@@ -47,7 +47,7 @@ export default function SellerPage() {
       description: "",
       price: 0,
       location: "",
-    },
+    }, 
   });
    
   async function onSubmit(values: FormValues) {
