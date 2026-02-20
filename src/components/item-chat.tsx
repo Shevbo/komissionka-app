@@ -96,7 +96,7 @@ export function ItemChat({ itemId }: Props) {
       return;
     }
 
-    const author = authorName.trim() || profile?.full_name ?? "Покупатель";
+    const author = profile?.full_name ?? "Покупатель";
 
     const { error: insertError } = await supabase.from("messages").insert({
       item_id: itemId,
