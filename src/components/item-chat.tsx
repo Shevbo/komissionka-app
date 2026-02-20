@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createBrowserClient } from "komiss/lib/supabase-browser";
+import { useAuth } from "komiss/components/auth-provider";
 import { Button } from "komiss/components/ui/button";
 import { Input } from "komiss/components/ui/input";
 import { Card, CardContent, CardHeader } from "komiss/components/ui/card";
@@ -27,6 +28,7 @@ export function ItemChat({ itemId }: Props) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const { profile, setAuthDialogOpen } = useAuth();
   const supabase = useMemo(() => createBrowserClient(), []);
 
   // Загрузка сообщений
@@ -87,12 +89,20 @@ export function ItemChat({ itemId }: Props) {
     setSending(true);
     setError(null);
 
-    const author = authorName.trim() || "Покупатель";
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setAuthDialogOpen(true);
+      setSending(false);
+      return;
+    }
+
+    const author = authorName.trim() || profile?.full_name ?? "Покупатель";
 
     const { error: insertError } = await supabase.from("messages").insert({
       item_id: itemId,
       content: text,
       author_name: author,
+      sender_id: user.id,
     });
 
     if (insertError) {

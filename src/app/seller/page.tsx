@@ -3,8 +3,9 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { createBrowserClient } from "komiss/lib/supabase-browser";
+import { useAuth } from "komiss/components/auth-provider";
 import {
   Form,
   FormControl,
@@ -39,6 +40,8 @@ export default function SellerPage() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const { setAuthDialogOpen } = useAuth();
+  const supabase = useMemo(() => createBrowserClient(), []);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema) as any,
@@ -54,7 +57,11 @@ export default function SellerPage() {
     setError(null);
     setSuccess(false);
 
-    const supabase = createBrowserClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setAuthDialogOpen(true);
+      return;
+    }
     let publicUrl: string | null = null;
 
     try {
@@ -85,7 +92,7 @@ export default function SellerPage() {
         price: values.price,
         location: values.location || null,
         image_url: publicUrl,
-        seller_id: null,
+        seller_id: user.id,
       });
 
       if (insertError) {
