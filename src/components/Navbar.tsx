@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "komiss/components/ui/button";
 import { AuthDialog } from "komiss/components/AuthDialog";
 import { useAuth } from "komiss/components/auth-provider";
 
 export function Navbar() {
-  const { user, profile, loading, authDialogOpen, setAuthDialogOpen } = useAuth();
+  const router = useRouter();
+  const { user, profile, loading, authDialogOpen, setAuthDialogOpen, clearAuth } = useAuth();
   const [loadingTimedOut, setLoadingTimedOut] = useState(false);
 
   useEffect(() => {
@@ -33,6 +35,8 @@ export function Navbar() {
     const { createBrowserClient } = await import("komiss/lib/supabase-browser");
     const supabase = createBrowserClient();
     await supabase.auth.signOut();
+    clearAuth();
+    router.refresh();
     window.location.href = "/";
   }
 

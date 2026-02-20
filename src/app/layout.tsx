@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Комиссионка — Вторая жизнь ваших вещей",
   description:
-    "Покупайте и продавайте личные вещи в Севастополе просто и безопасно.",
+    "Покупайте и продавайте личные вещи просто и безопасно.",
 };
 
 export default function RootLayout({

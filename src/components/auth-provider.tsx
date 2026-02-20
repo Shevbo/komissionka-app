@@ -13,6 +13,7 @@ type AuthContextValue = {
   refreshProfile: () => Promise<void>;
   authDialogOpen: boolean;
   setAuthDialogOpen: (open: boolean) => void;
+  clearAuth: () => void;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -23,6 +24,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const supabase = useMemo(() => createBrowserClient(), []);
+
+  const clearAuth = useCallback(() => {
+    setUser(null);
+    setProfile(null);
+  }, []);
 
   const fetchProfile = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -51,11 +57,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!cancelled) setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (cancelled) return;
-      setUser(session?.user ?? null);
-      if (session?.user) await fetchProfile();
-      else setProfile(null);
+      if (event === "SIGNED_OUT") {
+        setUser(null);
+        setProfile(null);
+      } else {
+        setUser(session?.user ?? null);
+        if (session?.user) await fetchProfile();
+        else setProfile(null);
+      }
       setLoading(false);
     });
 
@@ -73,8 +84,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refreshProfile: fetchProfile,
       authDialogOpen,
       setAuthDialogOpen,
+      clearAuth,
     }),
-    [user, profile, loading, fetchProfile, authDialogOpen]
+    [user, profile, loading, fetchProfile, authDialogOpen, clearAuth]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
