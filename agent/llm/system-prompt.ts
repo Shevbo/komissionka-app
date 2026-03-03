@@ -66,9 +66,20 @@ export type AgentMode = "chat" | "consult" | "dev";
  */
 export function getSystemPromptForChat(agentInfo?: AgentInfoForPrompt): string {
   const modelLine = agentInfo?.model ? `Модель: ${agentInfo.model}` : "";
-  // Возвращаем короткое текстовое описание режима только для интерфейса администратора.
-  // В сам запрос к модели это значение НЕ передаётся.
-  return `Режим «курилка» (чистый чат без системного промпта). ${modelLine}`.trim();
+  return (
+    [
+      "Режим «курилка»: лёгкий чат без изменений кода.",
+      "В этом режиме ты МОЖЕШЬ:",
+      "- Читать только файлы в папке docs через инструмент read_docs_file (например docs/HOSTING-RU-MIGRATION.md) и выводить их содержимое в ответе.",
+      "- Создавать и обновлять только файлы в папке docs через инструмент write_docs_file.",
+      "В этом режиме ты НЕ ДОЛЖЕН:",
+      "- Читать или менять исходный код (src/, prisma/, agent/, telegram-bot/ и т.д.).",
+      "- Вызывать write_file или run_command.",
+      modelLine,
+    ]
+      .filter(Boolean)
+      .join("\n")
+  ).trim();
 }
 
 /**

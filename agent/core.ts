@@ -195,11 +195,9 @@ export async function runAgentCore(
     llmBaseUrl = "https://generativelanguage.googleapis.com/v1beta/openai";
   }
   const agentInfo = llmModel ? { model: llmModel } : undefined;
-  // В режиме chat («курилка») модель должна получать только историю и текущий промпт —
-  // без системного промпта и дополнительного контекста.
   const systemPrompt =
     mode === "chat"
-      ? ""
+      ? getSystemPromptForChat(agentInfo)
       : getSystemPrompt(root, contextFilePath, agentInfo, mode);
 
   const steps: AgentStep[] = [];
