@@ -1,1 +1,1 @@
-{"app":"1.2.1","agent":"1.3.9","tgbot":"1.0.8","_baseline":"26.02.2025","_comment":"X=major>30%core, Y=minor<30%core, Z=patch(Исправить/Ошибка). Правила: docs/VERSIONING-RULES.md"}
+{"app":"1.2.2","agent":"1.3.9","tgbot":"1.0.8","_baseline":"26.02.2025","_comment":"X=major>30%core, Y=minor<30%core, Z=patch(Исправить/Ошибка). Правила: docs/VERSIONING-RULES.md"}

@@ -289,7 +289,7 @@ curl http://127.0.0.1:3000
 
 ### PowerShell-скрипты
 
-**Первый раз (полная настройка):**
+**Первый раз (полная настройка окружения):**
 
 ```powershell
 .\scripts\setup-hoster.ps1
@@ -297,14 +297,22 @@ curl http://127.0.0.1:3000
 
 Выполняет: обновление SSH config → копирование ключа → установка Git/Node/Nginx/PM2 на сервере → сборка → загрузка проекта → npm install + prisma + pm2. Потребуется ввести пароль (если ключ ещё не добавлен). Если есть локальный `.env`, он будет скопирован на сервер.
 
-**Дальнейшие деплои:**
+**Дальнейшие деплои (основной путь — через GitHub):**
 
 ```powershell
-.\scripts\deploy-hoster.ps1 -All      # Build + Upload + Restart
-.\scripts\deploy-hoster.ps1 -Build    # только сборка
-.\scripts\deploy-hoster.ps1 -Upload   # только загрузка на сервер
-.\scripts\deploy-hoster.ps1 -Restart  # только перезапуск PM2 на сервере
+.\scripts\deploy-hoster-git.ps1 -Branch main   # git push origin main → ssh hoster → scripts/deploy-from-git.sh main
 ```
+
+Скрипт `deploy-from-git.sh` на сервере выполняет:
+
+- `git fetch origin main && git reset --hard origin/main` в `~/komissionka`;
+- `npm ci` (при ошибках — fallback на `npm install`);
+- `npx prisma generate && npx prisma migrate deploy`;
+- `npm run build` (Next.js);
+- `pm2 restart komissionka agent bot`.
+
+**Старый скрипт деплоя:**  
+`.\scripts\deploy-hoster.ps1` (Build/Upload/Restart) оставлен **только как резервный вариант** (scp/rsync) на случай проблем с git-деплоем и в обычном режиме не используется.
 
 ---
 

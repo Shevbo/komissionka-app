@@ -1,4 +1,4 @@
-# Рабочая документация на приложение «Комиссионка» вер. 1.2.1
+# Рабочая документация на приложение «Комиссионка» вер. 1.2.2
 
 ## Оглавление
 
@@ -258,25 +258,30 @@ npx prisma migrate dev      # dev (не используется на серве
 
 ## 7. Deploy: от разработки до продакшена
 
-### 7.1 Условная схема: от разработки до внедрения в прод
+### 7.1 Условная схема: от разработки до внедрения в прод (git-деплой)
 
 ```
-[Разработка] → [Коммит] → [Локальная сборка] → [Загрузка на сервер] → [Применение на сервере]
-     │              │              │                     │                        │
-     │              │              │                     │                        └─ pm2 restart komissionka
-     │              │              │                     └─ rsync / incremental scp / full scp
-     │              │              └─ npm run build (создаёт .next/)
-     │              └─ version.json, what's new.md
+[Разработка] → [Коммит] → [git push origin main] → [deploy-hoster-git.ps1] → [deploy-from-git.sh на сервере]
+     │              │                │                      │                          │
+     │              │                │                      │                          └─ pm2 restart komissionka agent bot
+     │              │                │                      └─ git fetch/reset, npm ci/npm install, prisma migrate deploy, next build
+     │              │                └─ version.json, what's new.md
      └─ src/, prisma/, public/ — изменение кода
 ```
 
-**Этапы:**
+**Этапы (актуальный поток):**
 
-1. **Разработка** — правки в `src/`, `prisma/`, `public/`. Локальная разработка заморожена; изменения вносятся в репозитории (на сервере или через клонирование).
-2. **Версионирование** — обновление `version.json` (app), блок UPDATE в `what's new.md`.
-3. **Сборка** — `npm run build` локально или на сервере. Результат — каталог `.next/`.
-4. **Загрузка** — синхронизация изменённых файлов (rsync или инкрементальный scp) либо полная копия.
-5. **Применение** — на сервере: `npm install`, `npx prisma generate`, `npx prisma migrate deploy`, `pm2 restart komissionka`.
+1. **Разработка** — правки в `src/`, `prisma/`, `public/`. Локальная разработка заморожена; изменения вносятся в репозитории (локально и/или на сервере), но источником правды служит GitHub.
+2. **Версионирование** — обновление `version.json` (app), блок UPDATE в корневом `what's new.md`.
+3. **Коммит + push** — `git commit` и `git push origin main` из каталога `c:\komissionka`.
+4. **Git-деплой** — на локальной машине: `.\scripts\deploy-hoster-git.ps1 -Branch main`.  
+   Скрипт делает `git push origin main` и по SSH запускает на сервере `scripts/deploy-from-git.sh main`:
+   - `git fetch origin main && git reset --hard origin/main` в `~/komissionka`;
+   - `npm ci` (при ошибках — fallback на `npm install`);
+   - `npx prisma generate && npx prisma migrate deploy`;
+   - `npm run build` (Next.js);
+   - `pm2 restart komissionka agent bot`.
+5. **Старый скрипт `deploy-hoster.ps1`** — используется **только как резервный вариант** (scp/rsync) при проблемах с git-деплоем и в нормальном режиме не применяется.
 
 ### 7.2 Месторасположение изменённого кода (Dev)
 

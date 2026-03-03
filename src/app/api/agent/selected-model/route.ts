@@ -39,10 +39,12 @@ export async function GET(req: Request) {
   }
 
   const provider = isOpenRouterModel(model) ? "openrouter" : "google";
+  // Для Google Gemini всегда используем официальный endpoint без учёта AGENT_LLM_BASE_URL,
+  // чтобы не попасть на сторонние прокси с cookie‑аутентификацией.
   const baseUrl =
     provider === "openrouter"
       ? "https://openrouter.ai/api/v1"
-      : process.env.AGENT_LLM_BASE_URL ?? "https://generativelanguage.googleapis.com/v1beta/openai";
+      : "https://generativelanguage.googleapis.com/v1beta/openai";
   const apiKey =
     provider === "openrouter"
       ? process.env.AGENT_OPENROUTER_API_KEY

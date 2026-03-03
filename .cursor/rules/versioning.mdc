@@ -16,7 +16,7 @@ alwaysApply: true
 
 **Месторасположение:** репозиторий, код, docs, скрипты — на сервере (83.69.248.175, ~/komissionka).
 
-**Деплой — СТРОГО самостоятельно:** после изменений кода выполняй деплой сам: `.\scripts\deploy-hoster.ps1 -Upload -Restart`. Никогда не проси пользователя «убедитесь, что задеплоено».
+**Деплой — СТРОГО самостоятельно:** после изменений кода выполняй деплой сам через git-скрипт `.\scripts\deploy-hoster-git.ps1` (основной путь: git push → deploy-from-git.sh на сервере). Скрипт `deploy-hoster.ps1 -Upload -Restart` оставлен только как резервный вариант (scp/rsync) на случай проблем с git-деплоем и в обычном режиме не используется. Никогда не проси пользователя «убедитесь, что задеплоено».
 
 ## 1. Строгая логика X.Y.Z
 
@@ -75,4 +75,4 @@ alwaysApply: true
 
 ## 6. Деплой и перезапуск
 
-**Выполняй сам:** `.\scripts\deploy-hoster.ps1 -Upload -Restart` (с -Upload!). Не проси пользователя деплоить.
+**Выполняй сам:** git-деплой `.\scripts\deploy-hoster-git.ps1 -Branch main` (по умолчанию main), который запускает на сервере `scripts/deploy-from-git.sh` (git fetch/reset, npm ci/npm install, prisma migrate deploy, next build, pm2 restart komissionka agent bot). Старый `deploy-hoster.ps1 -Upload -Restart` используй только как резервный путь при сбоях git-деплоя. Не проси пользователя деплоить.

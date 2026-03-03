@@ -187,6 +187,13 @@ export async function runAgentCore(
     if (modelOverride.baseUrl) llmBaseUrl = modelOverride.baseUrl;
     if (modelOverride.apiKey !== undefined) llmApiKey = modelOverride.apiKey ?? undefined;
   }
+  // Для Google‑моделей всегда используем официальный endpoint Gemini,
+  // игнорируя любые AGENT_LLM_BASE_URL из окружения (во избежание cookie‑прокси).
+  const isOpenRouterModelId = (id: string | undefined): boolean =>
+    !!id && (id.startsWith("anthropic/") || id.toLowerCase().includes("claude"));
+  if (llmModel && !isOpenRouterModelId(llmModel)) {
+    llmBaseUrl = "https://generativelanguage.googleapis.com/v1beta/openai";
+  }
   const agentInfo = llmModel ? { model: llmModel } : undefined;
   // В режиме chat («курилка») модель должна получать только историю и текущий промпт —
   // без системного промпта и дополнительного контекста.
