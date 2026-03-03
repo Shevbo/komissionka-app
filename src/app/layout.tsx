@@ -1,18 +1,11 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Toaster } from "sonner";
 import "./globals.css";
 import { AuthProvider } from "komiss/components/auth-provider";
+import { ActivityProvider } from "komiss/components/ActivityProvider";
+import { DisconnectTracker } from "komiss/components/DisconnectTracker";
 import { Navbar } from "komiss/components/Navbar";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+import { CartHydrator } from "komiss/components/CartHydrator";
 
 export const metadata: Metadata = {
   title: "Комиссионка — Вторая жизнь ваших вещей",
@@ -27,12 +20,15 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ru">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+      <body className="antialiased">
         <AuthProvider>
-          <Navbar />
+          <ActivityProvider>
+            <DisconnectTracker />
+            <CartHydrator />
+            <Navbar />
           {children}
+            <Toaster richColors position="top-right" />
+          </ActivityProvider>
         </AuthProvider>
       </body>
     </html>

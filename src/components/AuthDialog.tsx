@@ -1,17 +1,19 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { createBrowserClient } from "komiss/lib/supabase-browser";
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "komiss/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "komiss/components/ui/tabs";
 import { Input } from "komiss/components/ui/input";
 import { Button } from "komiss/components/ui/button";
+import { Checkbox } from "komiss/components/ui/checkbox";
 import { useAuth } from "komiss/components/auth-provider";
+import { signIn } from "next-auth/react";
 
 type Props = {
   open: boolean;
@@ -24,20 +26,24 @@ export function AuthDialog({ open, onOpenChange }: Props) {
   const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rememberMe, setRememberMe] = useState(true);
 
   const { refreshProfile } = useAuth();
-  const supabase = useMemo(() => createBrowserClient(), []);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const result = await signIn("credentials", {
         email,
         password,
+        redirect: false,
       });
-      if (error) throw error;
+      if (result?.error) {
+        setError(result.error === "CredentialsSignin" ? "Неверный email или пароль" : result.error);
+        return;
+      }
       onOpenChange(false);
       await refreshProfile();
     } catch (err: unknown) {
@@ -52,12 +58,21 @@ export function AuthDialog({ open, onOpenChange }: Props) {
     setError(null);
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { data: { full_name: fullName } },
+      const res = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, full_name: fullName }),
       });
-      if (error) throw error;
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Ошибка регистрации");
+        return;
+      }
+      const result = await signIn("credentials", { email, password, redirect: false });
+      if (result?.error) {
+        setError("Аккаунт создан. Войдите с указанными данными.");
+        return;
+      }
       onOpenChange(false);
       await refreshProfile();
     } catch (err: unknown) {
@@ -72,6 +87,7 @@ export function AuthDialog({ open, onOpenChange }: Props) {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Вход в аккаунт</DialogTitle>
+          <DialogDescription className="sr-only">Вход или регистрация в аккаунт</DialogDescription>
         </DialogHeader>
         <Tabs defaultValue="login">
           <TabsList className="grid w-full grid-cols-2">
@@ -80,9 +96,7 @@ export function AuthDialog({ open, onOpenChange }: Props) {
           </TabsList>
           <TabsContent value="login">
             <form onSubmit={handleLogin} className="space-y-4 pt-4">
-              {error && (
-                <p className="text-sm text-destructive">{error}</p>
-              )}
+              {error && <p className="text-sm text-destructive">{error}</p>}
               <div>
                 <label className="mb-2 block text-sm font-medium">Email</label>
                 <Input
@@ -102,6 +116,16 @@ export function AuthDialog({ open, onOpenChange }: Props) {
                   required
                 />
               </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="remember-me"
+                  checked={rememberMe}
+                  onCheckedChange={(checked) => setRememberMe(checked === true)}
+                />
+                <label htmlFor="remember-me" className="cursor-pointer text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                  Запомнить меня
+                </label>
+              </div>
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? "Вход..." : "Войти"}
               </Button>
@@ -109,9 +133,7 @@ export function AuthDialog({ open, onOpenChange }: Props) {
           </TabsContent>
           <TabsContent value="signup">
             <form onSubmit={handleSignup} className="space-y-4 pt-4">
-              {error && (
-                <p className="text-sm text-destructive">{error}</p>
-              )}
+              {error && <p className="text-sm text-destructive">{error}</p>}
               <div>
                 <label className="mb-2 block text-sm font-medium">Имя</label>
                 <Input

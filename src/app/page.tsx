@@ -1,102 +1,187 @@
-import { getSupabaseClient } from "komiss/lib/supabase";
 import Link from "next/link";
+import { unstable_noStore } from "next/cache";
 import { Button } from "komiss/components/ui/button";
-import { Input } from "komiss/components/ui/input";
-import { CatalogGrid } from "komiss/components/catalog-grid";
+import { HomeCatalogSection } from "komiss/components/HomeCatalogSection";
+import { NewsBanner } from "komiss/components/NewsBanner";
+import { Star } from "lucide-react";
 
-type SearchParams = { q?: string };
+export const dynamic = "force-dynamic";
 
-export default async function Home({
-  searchParams,
-}: {
-  searchParams: Promise<SearchParams>;
-}) {
-  const params = await searchParams;
-  const query = (params.q ?? "").trim();
+type CatalogItem = {
+  id: string;
+  title: string;
+  price: number | { toString: () => string };
+  sale_price?: unknown;
+  image_url?: string | null;
+  image_urls?: string[];
+  location: string | null;
+  status: string;
+  is_auction?: boolean | null;
+  profiles?: { full_name?: string | null; name?: string | null } | null;
+};
 
-  const supabase = getSupabaseClient();
+type Testimonial = {
+  id: string;
+  author_name: string | null;
+  text: string | null;
+  is_active: boolean | null;
+  rating: number | null;
+};
 
-  let items: Array<{
-    id: string;
-    title: string | null;
-    price: number | null;
-    location: string | null;
-    image_url: string | null;
-    status: string | null;
-    is_auction?: boolean | null;
-    sale_price?: number | null;
-  }> = [];
-  let loadError: string | null = null;
+function StarRating({ rating }: { rating: number }) {
+  const value = Math.min(5, Math.max(0, Math.round(rating)));
+  return (
+    <div className="flex items-center gap-1" aria-label={`Оценка: ${value} из 5`}>
+      {[...Array(5)].map((_, i) => (
+        <Star
+          key={i}
+          className={`h-4 w-4 ${
+            i < value ? "text-yellow-500 fill-yellow-500" : "text-gray-300"
+          }`}
+        />
+      ))}
+    </div>
+  );
+}
 
-  if (supabase) {
-    let q = supabase
-      .from("items")
-      .select("id, title, price, location, image_url, status, is_auction, sale_price")
-      .eq("status", "active")
-      .order("created_at", { ascending: false });
-
-    if (query) {
-      q = q.ilike("title", `%${query}%`);
-    }
-
-    const { data, error } = await q;
-    if (error) loadError = error.message;
-    else items = data ?? [];
+async function fetchHomeData() {
+  try {
+    const { getHomeData } = await import("komiss/services/homePageService");
+    return await getHomeData();
+  } catch (e) {
+    console.error("Ошибка загрузки главной:", e);
+    return {
+      settings: {
+        hero_title: "Комиссионка",
+        hero_subtitle: "Продавайте и покупайте вещи легко",
+        hero_image_url: null,
+        h_banner: 200,
+        news_banner_height: 200,
+        news_scroll_speed: 3,
+      },
+      news: [],
+      testimonials: [],
+      items: [] as CatalogItem[],
+    };
   }
+}
+
+export default async function Home() {
+  unstable_noStore();
+  const { settings, news, testimonials, items } = await fetchHomeData();
+  const hBanner = settings.h_banner ?? 200;
+  const newsBannerHeight = (settings as { news_banner_height?: number }).news_banner_height ?? 200;
+  const newsScrollSpeed = (settings as { news_scroll_speed?: number }).news_scroll_speed ?? 3;
+  const heroImageUrl =
+    settings.hero_image_url?.trim() ? settings.hero_image_url : null;
 
   return (
     <div className="min-h-screen bg-white">
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Hero */}
+        {/* Hero баннер */}
         <section
-          className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-600 px-8 py-16 shadow-xl sm:px-12 sm:py-20 lg:px-16 lg:py-24"
+          className="relative z-10 overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-600 shadow-xl"
+          style={{ height: `${hBanner}px` }}
           aria-label="Главный баннер"
         >
-          <div className="relative z-10 mx-auto max-w-3xl text-center">
-            <h1 className="text-4xl font-bold tracking-tight text-white drop-shadow-sm sm:text-5xl lg:text-6xl">
-              Комиссионка: Вторая жизнь ваших вещей
+          {heroImageUrl && (
+            <div
+              className="absolute inset-0 z-0 w-full rounded-2xl"
+              style={{
+                backgroundImage: `url("${heroImageUrl}")`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+              }}
+              aria-hidden
+            />
+          )}
+          <div
+            className="absolute inset-0 z-[1] rounded-2xl bg-black/40"
+            aria-hidden
+          />
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 px-4 text-center">
+            <h1 className="text-xl font-semibold tracking-tight text-white drop-shadow-lg sm:text-2xl">
+              {settings.hero_title}
             </h1>
-            <p className="mt-4 text-lg text-white/95 sm:text-xl">
-              Покупайте и продавайте личные вещи в Севастополе просто и
-              безопасно
+            <p className="text-xs text-white drop-shadow-md sm:text-sm">
+              {settings.hero_subtitle}
             </p>
-            <div className="mt-8 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
-              <Button
-                asChild
-                size="lg"
-                className="h-12 bg-white px-8 text-emerald-700 hover:bg-white/90 hover:text-emerald-800"
-              >
-                <Link href="/seller">Выставить вещь</Link>
-              </Button>
-              <form action="/" method="GET" className="w-full sm:w-auto sm:min-w-[280px]">
-                <div className="flex gap-2">
-                  <Input
-                    type="search"
-                    name="q"
-                    placeholder="Поиск по названию..."
-                    defaultValue={query}
-                    className="h-12 border-0 bg-white/95 text-foreground placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-white"
-                  />
-                  <Button type="submit" size="lg" variant="secondary" className="h-12 px-6">
-                    Найти
-                  </Button>
-                </div>
-              </form>
-            </div>
+            <Button asChild size="sm" className="mt-2 bg-white text-emerald-700 hover:bg-white/90">
+              <Link href="/seller">Выставить вещь</Link>
+            </Button>
           </div>
         </section>
 
-        {/* Сетка товаров */}
-        <section className="mt-16" aria-label="Каталог товаров">
-          <h2 className="mb-8 text-2xl font-semibold text-foreground">
-            {query ? `Результаты поиска: «${query}»` : "Каталог товаров"}
-          </h2>
+        {/* Новости */}
+        <h2 className="mb-1.5 mt-10 flex items-center gap-1.5 text-lg font-semibold text-amber-900 sm:text-xl" aria-label="Раздел новостей">
+          <span className="text-xl" aria-hidden>🏠</span>
+          Новости
+        </h2>
+        <section
+          className="relative mb-8 overflow-hidden rounded-2xl border border-amber-200/60 bg-gradient-to-b from-amber-50/95 to-stone-100/95 shadow-lg"
+          aria-label="Баннер новостей"
+          style={{ height: `${newsBannerHeight}px` }}
+        >
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-amber-100/30 via-transparent to-transparent" aria-hidden="true" />
+          <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-amber-300/40 to-transparent" aria-hidden="true" />
+          <div className="relative z-10 h-full">
+            <NewsBanner
+              news={news.map((n) => ({ id: n.id, title: n.title, body: n.body }))}
+              heightPx={newsBannerHeight}
+              speedPxPerSec={newsScrollSpeed}
+            />
+          </div>
+        </section>
 
-          <CatalogGrid
-            initialItems={items}
-            loadError={loadError}
-            searchQuery={query}
-          />
+        {/* Каталог товаров */}
+        <HomeCatalogSection
+          items={items.map((item) => ({
+            id: item.id,
+            title: item.title,
+            price: item.price != null ? Number(item.price) : null,
+            sale_price: item.sale_price != null ? Number(item.sale_price) : null,
+            location: item.location ?? null,
+            image_urls: item.image_urls ?? (item.image_url ? [item.image_url] : []),
+            status: item.status,
+            is_auction: item.is_auction ?? null,
+            author_name: item.profiles?.full_name ?? null,
+          }))}
+        />
+
+        {/* Отзывы */}
+        <section className="mt-16" aria-label="Отзывы">
+          <h2 className="mb-6 text-2xl font-semibold text-foreground">Отзывы</h2>
+          {testimonials.length > 0 ? (
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {testimonials.map((t) => (
+                <blockquote
+                  key={t.id}
+                  className="group relative overflow-hidden rounded-2xl border border-zinc-200/80 bg-gradient-to-b from-zinc-50 to-white p-6 shadow-sm transition-shadow hover:shadow-md"
+                >
+                  <span
+                    className="absolute right-4 top-4 text-6xl font-serif text-emerald-200/60"
+                    aria-hidden
+                  >
+                    "
+                  </span>
+                  <p className="relative text-sm leading-relaxed text-foreground">{t.text ?? ""}</p>
+                  {t.rating != null && (
+                    <div className="mt-2">
+                      <StarRating rating={t.rating} />
+                    </div>
+                  )}
+                  <footer className="mt-4 flex items-center gap-2 border-t border-zinc-100 pt-4">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-100 text-xs font-semibold text-emerald-700">
+                      {(t.author_name ?? "?")[0].toUpperCase()}
+                    </span>
+                    <span className="font-medium text-zinc-600">{t.author_name ?? "Аноним"}</span>
+                  </footer>
+                </blockquote>
+              ))}
+            </div>
+          ) : (
+            <p className="py-4 text-sm text-muted-foreground">Пока нет отзывов.</p>
+          )}
         </section>
       </main>
     </div>

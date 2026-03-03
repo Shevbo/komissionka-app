@@ -1,10 +1,9 @@
 "use client";
 
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useMemo, useState } from "react";
-import { createBrowserClient } from "komiss/lib/supabase-browser";
+import { useState } from "react";
 import { useAuth } from "komiss/components/auth-provider";
 import {
   Form,
@@ -34,27 +33,24 @@ interface FormValues {
   location: string;
 }
 
-const BUCKET = "item-photos";
-
 export default function SellerPage() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const { setAuthDialogOpen } = useAuth();
-  const supabase = useMemo(() => createBrowserClient(), []);
+  const [imageFiles, setImageFiles] = useState<File[]>([]); // Изменено на массив файлов
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]); // Для превью изображений
+  const { user, setAuthDialogOpen } = useAuth();
 
   const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema) as any,
+    resolver: zodResolver(formSchema) as Resolver<FormValues>,
     defaultValues: {
       title: "",
       description: "",
       price: 0,
       location: "",
-    }, 
+    },
   });
-   
+
   async function onSubmit(values: FormValues) {
-    const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       setAuthDialogOpen(true);
       return;
@@ -62,53 +58,64 @@ export default function SellerPage() {
 
     setError(null);
     setSuccess(false);
-    let publicUrl: string | null = null;
+    let imageUrls: string[] = [];
 
     try {
-      // 1. Загружаем файл в бакет item-photos
-      if (imageFile) {
-        const fileExt = imageFile.name.split(".").pop() ?? "jpg";
-        const filePath = `${Date.now()}-${crypto.randomUUID()}.${fileExt}`;
+      if (imageFiles.length > 0) {
+        const formData = new FormData();
+        imageFiles.forEach((file) => {
+          formData.append("files", file); // Добавляем каждый файл с именем "files"
+        });
 
-        const { error: uploadError } = await supabase.storage
-          .from(BUCKET)
-          .upload(filePath, imageFile, { upsert: false });
-
-        if (uploadError) {
-          console.log("[Ошибка загрузки в Storage]", uploadError);
-          setError(`Ошибка загрузки: ${uploadError.message}`);
+        const uploadRes = await fetch("/api/upload/item", {
+          method: "POST",
+          body: formData,
+        });
+        if (!uploadRes.ok) {
+          const d = await uploadRes.json().catch(() => ({}));
+          setError(d.error ?? "Ошибка загрузки фото");
           return;
         }
-
-        // 2. Получаем публичную ссылку
-        const { data } = supabase.storage.from(BUCKET).getPublicUrl(filePath);
-        publicUrl = data.publicUrl;
+        const uploadData = await uploadRes.json();
+        imageUrls = uploadData.urls ?? []; // Ожидаем массив URL-адресов
       }
 
-      // 3. Вставляем запись в items
-      const { error: insertError } = await supabase.from("items").insert({
-        title: values.title,
-        description: values.description || null,
-        price: values.price,
-        location: values.location || null,
-        image_url: publicUrl,
-        seller_id: user.id,
+      const res = await fetch("/api/items", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: values.title,
+          description: values.description || null,
+          price: values.price,
+          location: values.location || null,
+          image_urls: imageUrls, // Отправляем массив URL-адресов
+        }),
       });
 
-      if (insertError) {
-        console.log("[Ошибка вставки в items]", insertError);
-        setError(`Ошибка сохранения: ${insertError.message}`);
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(d.error ?? "Ошибка сохранения");
         return;
       }
 
       setSuccess(true);
       form.reset();
-      setImageFile(null);
+      setImageFiles([]);
+      setImagePreviews([]);
     } catch (err) {
-      console.log("[Непредвиденная ошибка]", err);
       setError(err instanceof Error ? err.message : "Неизвестная ошибка");
     }
   }
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const filesArray = Array.from(e.target.files);
+      setImageFiles(filesArray);
+
+      const previews = filesArray.map((file) => URL.createObjectURL(file));
+      setImagePreviews(previews);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background p-8">
@@ -215,15 +222,23 @@ export default function SellerPage() {
                   <Input
                     type="file"
                     accept="image/*"
-                    onChange={(e) =>
-                      setImageFile(e.target.files?.[0] ?? null)
-                    }
+                    multiple // Разрешаем выбор нескольких файлов
+                    onChange={handleImageChange}
                     className="cursor-pointer"
                   />
-                  {imageFile && (
-                    <p className="text-sm text-muted-foreground">
-                      Выбран файл: {imageFile.name}
-                    </p>
+                  {imagePreviews.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {imagePreviews.map((previewUrl, index) => (
+                        <div key={index} className="relative h-24 w-24 rounded-md overflow-hidden">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={previewUrl}
+                            alt={`Превью ${index + 1}`}
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
                 <Button type="submit" className="w-full">

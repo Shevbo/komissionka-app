@@ -1,95 +1,104 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { createBrowserClient } from "komiss/lib/supabase-browser";
-import type { User } from "@supabase/supabase-js";
+import { SessionProvider, useSession, signOut as nextAuthSignOut } from "next-auth/react";
+import { useCart } from "komiss/store/useCart";
+import { trackActivity } from "komiss/lib/activity";
 
-type Profile = { full_name: string | null; avatar_url: string | null } | null;
+type Profile = { full_name: string | null; avatar_url: string | null; role: string | null; telegram_id?: string | null; telegram_username?: string | null } | null;
 
 type AuthContextValue = {
-  user: User | null;
+  user: { id: string; email?: string | null } | null;
   profile: Profile;
+  userRole: string | null;
   loading: boolean;
   refreshProfile: () => Promise<void>;
   authDialogOpen: boolean;
   setAuthDialogOpen: (open: boolean) => void;
   clearAuth: () => void;
+  signOut: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+function AuthContextInner({ children }: { children: React.ReactNode }) {
+  const { data: session, status } = useSession();
   const [profile, setProfile] = useState<Profile>(null);
-  const [loading, setLoading] = useState(true);
+  const [profileLoadAttempted, setProfileLoadAttempted] = useState(false);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
-  const supabase = useMemo(() => createBrowserClient(), []);
+
+  const user = session?.user ? { id: (session.user as { id?: string }).id ?? "", email: session.user.email ?? null } : null;
+
+  const refreshProfile = useCallback(async () => {
+    if (!user?.id) {
+      setProfile(null);
+      setProfileLoadAttempted(false);
+      return;
+    }
+    setProfileLoadAttempted(false);
+    try {
+      const res = await fetch("/api/auth/profile");
+      const data = await res.json();
+      setProfile(data.profile ?? { full_name: null, avatar_url: null, role: null, telegram_id: null, telegram_username: null });
+    } catch {
+      setProfile(null);
+    } finally {
+      setProfileLoadAttempted(true);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (status === "loading" || !user) {
+      setProfile(null);
+      setProfileLoadAttempted(false);
+      return;
+    }
+    refreshProfile();
+  }, [status, user?.id, refreshProfile]);
 
   const clearAuth = useCallback(() => {
-    setUser(null);
     setProfile(null);
   }, []);
 
-  const fetchProfile = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      setProfile(null);
-      return;
+  const signOut = useCallback(async () => {
+    try {
+      await trackActivity("LOGOUT");
+    } catch {}
+    await nextAuthSignOut({ redirect: false });
+    setProfile(null);
+    useCart.getState().clearCart();
+    if (typeof window !== "undefined") {
+      window.location.href = "/";
     }
-    const { data } = await supabase.from("profiles").select("full_name, avatar_url").eq("id", user.id).single();
-    setProfile(data ?? { full_name: null, avatar_url: null });
-  }, [supabase]);
+  }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    supabase.auth.getUser().then(
-      async ({ data: { user } }) => {
-        if (cancelled) return;
-        setUser(user);
-        if (user) await fetchProfile();
-        else setProfile(null);
-      },
-      () => {
-        if (!cancelled) setUser(null);
-      }
-    ).finally(() => {
-      if (!cancelled) setLoading(false);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (cancelled) return;
-      if (event === "SIGNED_OUT") {
-        setUser(null);
-        setProfile(null);
-      } else {
-        setUser(session?.user ?? null);
-        if (session?.user) await fetchProfile();
-        else setProfile(null);
-      }
-      setLoading(false);
-    });
-
-    return () => {
-      cancelled = true;
-      subscription.unsubscribe();
-    };
-  }, [supabase, fetchProfile]);
+  const loading = status === "loading" || (!!user && !profileLoadAttempted);
+  const userRole = profile?.role ?? null;
 
   const value = useMemo(
     () => ({
       user,
       profile,
+      userRole,
       loading,
-      refreshProfile: fetchProfile,
+      refreshProfile,
       authDialogOpen,
       setAuthDialogOpen,
       clearAuth,
+      signOut,
     }),
-    [user, profile, loading, fetchProfile, authDialogOpen, clearAuth]
+    [user, profile, userRole, loading, refreshProfile, authDialogOpen, clearAuth, signOut]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  return (
+    <SessionProvider>
+      <AuthContextInner>{children}</AuthContextInner>
+    </SessionProvider>
+  );
 }
 
 export function useAuth() {

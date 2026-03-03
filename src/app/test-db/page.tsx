@@ -1,34 +1,18 @@
-import { getSupabaseClient } from "komiss/lib/supabase";
 import Link from "next/link";
 import { Card, CardContent, CardHeader } from "komiss/components/ui/card";
+import { prisma } from "komiss/lib/prisma";
 
 export default async function TestDbPage() {
-  const supabase = getSupabaseClient();
+  let items: { id: string; title: string | null; price: unknown; location: string | null; image_url: string | null }[] = [];
+  let error: string | null = null;
 
-  if (!supabase) {
-    return (
-      <div className="min-h-screen bg-background p-8">
-        <div className="mx-auto max-w-2xl">
-          <h1 className="mb-4 text-2xl font-semibold text-destructive">
-            Ошибка конфигурации
-          </h1>
-          <p className="text-muted-foreground">
-            Отсутствуют переменные окружения. Проверьте .env.local
-          </p>
-          <Link
-            href="/"
-            className="mt-4 inline-block text-primary underline hover:no-underline"
-          >
-            ← На главную
-          </Link>
-        </div>
-      </div>
-    );
+  try {
+    items = await prisma.items.findMany({
+      select: { id: true, title: true, price: true, location: true, image_url: true },
+    });
+  } catch (e) {
+    error = e instanceof Error ? e.message : "Ошибка загрузки";
   }
-
-  const { data: items, error } = await supabase
-    .from("items")
-    .select("id, title, price, location, image_url");
 
   if (error) {
     return (
@@ -37,7 +21,7 @@ export default async function TestDbPage() {
           <h1 className="mb-4 text-2xl font-semibold text-destructive">
             Ошибка загрузки
           </h1>
-          <p className="text-muted-foreground">{error.message}</p>
+          <p className="text-muted-foreground">{error}</p>
           <Link
             href="/"
             className="mt-4 inline-block text-primary underline hover:no-underline"

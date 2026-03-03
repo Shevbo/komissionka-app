@@ -33,9 +33,21 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# uploaded files (hero, item images)
+/public/uploads
+
+# agent full reasoning logs
+/.agent-logs
+# agent curl -d temp files
+/.agent-tmp
+# agent backup for dev mode approval flow
+/.agent-backup
+
 # vercel
 .vercel
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+/src/generated/prisma

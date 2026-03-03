@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { createBrowserClient } from "komiss/lib/supabase-browser";
+import { signIn } from "next-auth/react";
 import { Button } from "komiss/components/ui/button";
 import { Input } from "komiss/components/ui/input";
 import { Card, CardContent, CardHeader } from "komiss/components/ui/card";
@@ -23,17 +23,26 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      const supabase = createBrowserClient();
-      const { error } = await supabase.auth.signUp({
+      const res = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, full_name: fullName }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error ?? "Ошибка регистрации");
+        return;
+      }
+
+      const result = await signIn("credentials", {
         email,
         password,
-        options: {
-          data: { full_name: fullName },
-        },
+        redirect: false,
       });
 
-      if (error) {
-        setError(error.message);
+      if (result?.error) {
+        setError("Аккаунт создан. Войдите с указанными данными.");
         return;
       }
 

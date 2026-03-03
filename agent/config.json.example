@@ -1,0 +1,1 @@
+{"root":"/path/to/komissionka","debug":false,"llmApiKey":"","llmBaseUrl":"","llmModel":"gpt-4o","timeoutMs":120000,"maxOutputLength":8192,"serverPort":3140,"apiKey":"","appUrl":"http://localhost:3000","fullCodeMaxChars":0,"toolResultMaxCharsInContext":8000,"historyTurnMaxChars":6000}

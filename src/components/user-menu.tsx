@@ -1,59 +1,43 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { createBrowserClient } from "komiss/lib/supabase-browser";
+import { useSession } from "next-auth/react";
 import { Button } from "komiss/components/ui/button";
-import type { User } from "@supabase/supabase-js";
+import { useAuth } from "komiss/components/auth-provider";
 
 export function UserMenu() {
-  const [user, setUser] = useState<User | null>(null);
+  const { data: session, status } = useSession();
+  const { profile, signOut } = useAuth();
   const [loading, setLoading] = useState(true);
-  const supabase = useMemo(() => createBrowserClient(), []);
 
   useEffect(() => {
-
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setUser(user);
-      setLoading(false);
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-
-    return () => subscription.unsubscribe();
-  }, [supabase]);
+    setLoading(status === "loading");
+  }, [status]);
 
   if (loading) {
-    return (
-      <div className="h-10 w-20 animate-pulse rounded-md bg-muted" />
-    );
+    return <div className="h-10 w-20 animate-pulse rounded-md bg-muted" />;
   }
 
-  if (user) {
+  if (session?.user) {
     const displayName =
-      user.user_metadata?.full_name ??
-      user.user_metadata?.name ??
-      user.email?.split("@")[0] ??
+      profile?.full_name ??
+      (session.user as { name?: string }).name ??
+      session.user.email?.split("@")[0] ??
       "Пользователь";
-
-    async function handleSignOut() {
-      await supabase.auth.signOut();
-      window.location.href = "/";
-    }
 
     return (
       <div className="flex items-center gap-3">
-        <span className="text-sm font-medium text-foreground">
+        <Link
+          href="/profile"
+          className="text-sm font-medium text-foreground hover:underline"
+        >
           {displayName}
-        </span>
+        </Link>
         <Button asChild variant="outline" size="sm">
           <Link href="/seller">Выставить вещь</Link>
         </Button>
-        <Button variant="ghost" size="sm" onClick={handleSignOut}>
+        <Button variant="ghost" size="sm" onClick={() => signOut()}>
           Выйти
         </Button>
       </div>

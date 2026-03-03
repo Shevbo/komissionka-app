@@ -1,7 +1,10 @@
-import { getSupabaseClient } from "komiss/lib/supabase";
 import Link from "next/link";
-import { Card } from "komiss/components/ui/card";
-import { ItemChat } from "komiss/components/item-chat";
+import { unstable_noStore } from "next/cache";
+import { prisma } from "komiss/lib/prisma";
+import { resolveImageUrl } from "komiss/lib/image-url";
+import { ItemPageContent } from "./ItemPageContent";
+
+export const dynamic = "force-dynamic";
 
 type Params = { id: string };
 
@@ -10,30 +13,21 @@ export default async function ItemPage({
 }: {
   params: Promise<Params>;
 }) {
+  unstable_noStore();
   const { id } = await params;
-  const supabase = getSupabaseClient();
+  const idRaw = typeof id === "string" ? id : Array.isArray(id) ? (id[0] ?? "") : String(id ?? "");
+  const idClean = (() => {
+    try {
+      return decodeURIComponent(idRaw).trim();
+    } catch {
+      return idRaw.trim();
+    }
+  })();
 
-  if (!supabase) {
+  if (!idClean) {
     return (
       <div className="min-h-screen bg-background p-8">
-        <p className="text-destructive">Ошибка конфигурации</p>
-        <Link href="/">← На главную</Link>
-      </div>
-    );
-  }
-
-  const { data: item, error } = await supabase
-    .from("items")
-    .select("id, title, description, price, location, image_url, status, is_auction, sale_price")
-    .eq("id", id)
-    .single();
-
-  if (error || !item) {
-    return (
-      <div className="min-h-screen bg-background p-8">
-        <p className="text-destructive">
-          {error?.message ?? "Товар не найден"}
-        </p>
+        <p className="text-destructive">Неверный идентификатор товара</p>
         <Link href="/" className="text-primary hover:underline">
           ← На главную
         </Link>
@@ -41,92 +35,68 @@ export default async function ItemPage({
     );
   }
 
-  const formatPrice = (price: number | null) =>
-    price != null ? `${Number(price).toLocaleString("ru-RU")} ₽` : "—";
+  const row = await prisma.items.findUnique({
+    where: { id: idClean },
+    select: {
+      id: true,
+      seller_id: true,
+      title: true,
+      description: true,
+      price: true,
+      location: true,
+      image_url: true,
+      image_urls: true,
+      status: true,
+      is_auction: true,
+      sale_price: true,
+    },
+  });
 
-  const salePrice = (item as { sale_price?: number | null }).sale_price;
-  const isAuction = (item as { is_auction?: boolean | null }).is_auction;
-
-  return (
-    <div className="min-h-screen bg-white">
-      <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
-        <Link
-          href="/"
-          className="mb-6 inline-flex items-center text-muted-foreground hover:text-foreground"
-        >
-          ← Назад к каталогу
+  if (!row) {
+    const count = await prisma.items.count();
+    console.warn(`[items] Товар не найден: id=${JSON.stringify(idClean)}, raw=${JSON.stringify(idRaw)}, всего в БД: ${count}`);
+    return (
+      <div className="min-h-screen bg-background p-8">
+        <p className="text-destructive">Товар не найден</p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          ID: {idClean || "(пусто)"} · В каталоге: {count} товаров
+        </p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Диагностика: откройте <code className="rounded bg-muted px-1">/api/items/{idClean || "..."}</code> — если там тоже 404, проблема в БД или id.
+        </p>
+        <Link href="/" className="mt-4 inline-block text-primary hover:underline">
+          ← На главную
         </Link>
+      </div>
+    );
+  }
 
-        <Card className="overflow-hidden">
-          <div className="grid gap-8 md:grid-cols-2">
-            <div className="aspect-square w-full bg-muted md:aspect-auto md:min-h-[400px]">
-              {item.image_url ? (
-                <img
-                  src={item.image_url}
-                  alt={item.title ?? "Фото товара"}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-                  Нет фото
-                </div>
-              )}
-            </div>
-            <div className="flex flex-col p-6 md:p-8">
-              <div className="mb-4 flex flex-wrap gap-2">
-                <span className="rounded-full bg-emerald-500 px-3 py-1 text-sm font-medium text-white">
-                  Активно
-                </span>
-                {isAuction && (
-                  <span className="rounded-full bg-amber-500 px-3 py-1 text-sm font-bold text-white">
-                    АУКЦИОН
-                  </span>
-                )}
-              </div>
-              <h1 className="text-2xl font-bold md:text-3xl">{item.title}</h1>
+  const rawUrls =
+    row.image_urls && row.image_urls.length > 0
+      ? row.image_urls
+      : row.image_url
+        ? [row.image_url]
+        : [];
+  const image_urls = rawUrls.map((u) => resolveImageUrl(u) ?? u).filter(Boolean) as string[];
+  const profile = await prisma.profiles.findUnique({
+    where: { id: row.seller_id },
+    select: { full_name: true },
+  });
+  const resolvedImageUrl = resolveImageUrl(row.image_url) ?? row.image_url;
+  const item = {
+    id: row.id,
+    seller_id: row.seller_id,
+    title: row.title,
+    description: row.description,
+    price: Number(row.price),
+    location: row.location,
+    image_url: resolvedImageUrl,
+    image_urls,
+    status: row.status,
+    is_auction: row.is_auction,
+    sale_price: row.sale_price != null ? Number(row.sale_price) : null,
+    profiles: profile ? { full_name: profile.full_name } : null,
+  };
 
-              <div className="mt-6 space-y-4">
-                <div className="flex items-baseline gap-3">
-                  {salePrice != null ? (
-                    <>
-                      <span className="text-lg text-muted-foreground line-through">
-                        {formatPrice(item.price)}
-                      </span>
-                      <span className="text-2xl font-bold text-orange-600">
-                        {formatPrice(salePrice)}
-                      </span>
-                    </>
-                  ) : (
-                    <span className="text-2xl font-bold text-primary">
-                      {formatPrice(item.price)}
-                    </span>
-                  )}
-                </div>
-
-                {item.location && (
-                  <p className="text-muted-foreground">
-                    <span className="font-medium">Местоположение:</span>{" "}
-                    {item.location}
-                  </p>
-                )}
-
-                {item.description && (
-                  <div>
-                    <h3 className="mb-2 font-semibold">Описание</h3>
-                    <p className="whitespace-pre-wrap text-muted-foreground">
-                      {item.description}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        <section className="mt-10">
-          <ItemChat itemId={id} />
-        </section>
-      </main>
-    </div>
-  );
+  return <ItemPageContent item={item} itemId={idClean} />;
 }

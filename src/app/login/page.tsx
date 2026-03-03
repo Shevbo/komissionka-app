@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { createBrowserClient } from "komiss/lib/supabase-browser";
+import { signIn } from "next-auth/react";
 import { Button } from "komiss/components/ui/button";
 import { Input } from "komiss/components/ui/input";
 import { Card, CardContent, CardHeader } from "komiss/components/ui/card";
@@ -22,19 +22,22 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const supabase = createBrowserClient();
-      const { error } = await supabase.auth.signInWithPassword({
+      const result = await signIn("credentials", {
         email,
         password,
+        redirect: false,
       });
 
-      if (error) {
-        setError(error.message);
+      if (result?.error) {
+        setError(result.error === "CredentialsSignin" ? "Неверный email или пароль" : result.error);
+        return;
+      }
+      if (!result?.ok) {
+        setError("Вход не выполнен. Проверьте NEXTAUTH_URL и NEXTAUTH_SECRET на сервере.");
         return;
       }
 
-      router.push("/");
-      router.refresh();
+      window.location.href = "/";
     } finally {
       setLoading(false);
     }
@@ -57,10 +60,7 @@ export default function LoginPage() {
               </p>
             )}
             <div>
-              <label
-                htmlFor="email"
-                className="mb-2 block text-sm font-medium"
-              >
+              <label htmlFor="email" className="mb-2 block text-sm font-medium">
                 Email
               </label>
               <Input
@@ -73,10 +73,7 @@ export default function LoginPage() {
               />
             </div>
             <div>
-              <label
-                htmlFor="password"
-                className="mb-2 block text-sm font-medium"
-              >
+              <label htmlFor="password" className="mb-2 block text-sm font-medium">
                 Пароль
               </label>
               <Input

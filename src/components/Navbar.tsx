@@ -2,15 +2,33 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { ShoppingCart, FileText, Trash2 } from "lucide-react";
 import { Button } from "komiss/components/ui/button";
 import { AuthDialog } from "komiss/components/AuthDialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetFooter,
+} from "komiss/components/ui/sheet";
 import { useAuth } from "komiss/components/auth-provider";
+import { useCart } from "komiss/store/useCart";
+import { cn } from "komiss/lib/utils";
+
+function formatPrice(price: number | null): string {
+  if (price == null) return "—";
+  return new Intl.NumberFormat("ru-RU", {
+    style: "currency",
+    currency: "RUB",
+  }).format(price);
+}
 
 export function Navbar() {
-  const router = useRouter();
-  const { user, profile, loading, authDialogOpen, setAuthDialogOpen, clearAuth } = useAuth();
+  const { user, profile, userRole, loading, authDialogOpen, setAuthDialogOpen, signOut } = useAuth();
   const [loadingTimedOut, setLoadingTimedOut] = useState(false);
+  const [cartOpen, setCartOpen] = useState(false);
+  const { items, removeItem, totalPrice } = useCart();
 
   useEffect(() => {
     if (!loading) return;
@@ -26,18 +44,11 @@ export function Navbar() {
 
   const displayName =
     profile?.full_name ??
-    user?.user_metadata?.full_name ??
-    user?.user_metadata?.name ??
     user?.email?.split("@")[0] ??
     null;
 
   async function handleSignOut() {
-    const { createBrowserClient } = await import("komiss/lib/supabase-browser");
-    const supabase = createBrowserClient();
-    await supabase.auth.signOut();
-    clearAuth();
-    router.refresh();
-    window.location.href = "/";
+    await signOut();
   }
 
   return (
@@ -52,25 +63,133 @@ export function Navbar() {
               <div className="h-9 w-20 animate-pulse rounded-md bg-muted" />
             ) : user ? (
               <>
-                <span className="text-sm font-medium text-foreground">
+                <Link
+                  href="/profile"
+                  className="text-sm font-medium text-foreground hover:underline"
+                >
                   {displayName ?? "Пользователь"}
-                </span>
+                </Link>
                 <Button asChild variant="outline" size="sm">
                   <Link href="/seller">Выставить вещь</Link>
+                </Button>
+                {userRole === "admin" && (
+                  <Button asChild variant="outline" size="sm">
+                    <Link href="/admin">Админ. Консоль</Link>
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="relative h-9 w-9"
+                  onClick={() => setCartOpen(true)}
+                  aria-label="Корзина"
+                >
+                  <ShoppingCart className="h-4 w-4" />
+                  {items.length > 0 && (
+                    <span
+                      className={cn(
+                        "absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white"
+                      )}
+                    >
+                      {items.length > 9 ? "9+" : items.length}
+                    </span>
+                  )}
                 </Button>
                 <Button variant="ghost" size="sm" onClick={handleSignOut}>
                   Выйти
                 </Button>
               </>
             ) : (
-              <Button size="sm" onClick={() => setAuthDialogOpen(true)}>
-                Войти
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="relative h-9 w-9"
+                  onClick={() => setCartOpen(true)}
+                  aria-label="Корзина"
+                >
+                  <ShoppingCart className="h-4 w-4" />
+                  {items.length > 0 && (
+                    <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                      {items.length > 9 ? "9+" : items.length}
+                    </span>
+                  )}
+                </Button>
+                <Button size="sm" onClick={() => setAuthDialogOpen(true)}>
+                  Войти
+                </Button>
+              </>
             )}
           </div>
         </div>
       </header>
       <AuthDialog open={authDialogOpen} onOpenChange={setAuthDialogOpen} />
+      <Sheet open={cartOpen} onOpenChange={setCartOpen}>
+        <SheetContent side="right" className="flex flex-col p-0">
+          <SheetHeader className="border-b p-4">
+            <SheetTitle>Корзина</SheetTitle>
+          </SheetHeader>
+          <div className="flex-1 overflow-y-auto p-4">
+            {items.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Корзина пуста</p>
+            ) : (
+              <ul className="space-y-3">
+                {items.map((item) => (
+                  <li
+                    key={item.id}
+                    className="flex gap-3 rounded-lg border p-3"
+                  >
+                    <div className="h-14 w-14 shrink-0 overflow-hidden rounded-md bg-muted">
+                      {item.image_urls && item.image_urls.length > 0 ? ( // Изменено на image_urls
+                        <img
+                          src={item.image_urls[0]}
+                          alt={item.title ?? ""}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                          <ShoppingCart className="h-6 w-6 opacity-40" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="line-clamp-2 text-sm font-medium">{item.title ?? "Без названия"}</p>
+                      <p className="text-sm font-semibold text-primary">
+                        {formatPrice(item.price)}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="shrink-0 gap-1 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      onClick={() => removeItem(item.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Удалить
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          {items.length > 0 && (
+            <SheetFooter className="flex-row items-center justify-between border-t p-4">
+              <span className="text-lg font-semibold">
+                Итого: {formatPrice(totalPrice())}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9"
+                title="Сформировать предложение (PDF)"
+                aria-label="Сформировать предложение (PDF)"
+              >
+                <FileText className="h-5 w-5" />
+              </Button>
+            </SheetFooter>
+          )}
+        </SheetContent>
+      </Sheet>
     </>
   );
 }
