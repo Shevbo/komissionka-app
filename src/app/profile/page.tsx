@@ -64,7 +64,8 @@ export default function ProfilePage() {
         setProfile(p);
         setFullName(p?.full_name ?? "");
         setPhone(p?.phone ?? "");
-        setEmail(p?.email ?? (user.email ?? ""));
+        const fallbackEmail = user?.email ?? "";
+        setEmail(p?.email ?? fallbackEmail);
         setPreferredLocation(p?.preferred_location ?? "");
         setEmailNotifications(
           p?.email_notifications_enabled ?? true
