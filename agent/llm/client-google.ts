@@ -133,9 +133,8 @@ export async function requestGoogleNative(
   const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
   try {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
-    // Поправка «грамматики» запроса: передаём ключ и как x-goog-api-key, и (для внешних прокси) в Authorization.
+    // Поправка «грамматики» запроса: ключ передаётся и в query (?key=...), и в x-goog-api-key.
     headers["x-goog-api-key"] = apiKey;
-    headers.Authorization = `Bearer ${apiKey}`;
     const fetchOptions: RequestInit & { dispatcher?: import("undici").Dispatcher } = {
       method: "POST",
       headers,
