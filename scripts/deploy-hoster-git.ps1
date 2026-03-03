@@ -16,9 +16,10 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "git status failed"
     }
-    if ($status.Trim().Length -ne 0) {
+    $statusText = if ($null -eq $status) { "" } else { $status.Trim() }
+    if ($statusText.Length -ne 0) {
         Write-Host "Рабочее дерево не чистое. Закоммитьте или откатите изменения перед деплоем." -ForegroundColor Red
-        Write-Host $status -ForegroundColor Yellow
+        Write-Host $statusText -ForegroundColor Yellow
         exit 1
     }
 
