@@ -17,8 +17,11 @@ git reset --hard "origin/$BRANCH"
 CURRENT_COMMIT="$(git rev-parse --short HEAD || echo unknown)"
 echo "[deploy-from-git] Now at commit $CURRENT_COMMIT"
 
-echo "[2/4] Installing dependencies (npm ci)..."
-npm ci
+echo "[2/4] Installing dependencies (npm ci, fallback to npm install)..."
+if ! npm ci; then
+  echo "[deploy-from-git] npm ci failed, falling back to npm install..."
+  npm install
+fi
 
 echo "[3/4] Prisma generate + migrate deploy..."
 npx prisma generate
