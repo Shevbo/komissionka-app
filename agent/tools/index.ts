@@ -121,6 +121,21 @@ export function executeTool(
           : `[write_docs_file] error: ${writeOut.error}`
       );
     }
+    case "read_docs_file": {
+      const path = args.path as string;
+      const normPath = path.replace(/\\/g, "/").replace(/^\/+/, "");
+      if (!normPath.startsWith("docs/")) {
+        return Promise.resolve(
+          `[read_docs_file] error: В режиме «курилка» можно читать только файлы в папке docs/. Путь должен начинаться с docs/ (например docs/FAQ.md).`
+        );
+      }
+      const out = readFile(normPath);
+      return Promise.resolve(
+        out.ok
+          ? `[read_docs_file]\npath: ${out.path}\ncontent:\n${out.content}`
+          : `[read_docs_file] error: ${out.error}`
+      );
+    }
     case "get_agent_info": {
       const cfg = getConfig();
       const provider = cfg.llmBaseUrl?.includes("generativelanguage") ? "Google Gemini" : cfg.llmBaseUrl ? "custom" : "OpenAI-compatible";
@@ -308,9 +323,27 @@ const WRITE_DOCS_FILE: ToolDefinition = {
   },
 };
 
-/** Режим «курилка»: get_agent_info + write_docs_file (только docs). */
+/** read_file только для docs/ — для режима «курилка» (показ документов в чате). */
+const READ_DOCS_FILE: ToolDefinition = {
+  type: "function",
+  function: {
+    name: "read_docs_file",
+    description:
+      "Прочитать содержимое файла в папке docs и вывести его в ответе. Используй, когда пользователь просит показать документ или инструкцию в чате. Путь должен начинаться с docs/ (например docs/TELEGRAM-BOT-VARIANT-C-STAGES.md).",
+    parameters: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Путь к файлу в docs/ (например docs/FAQ.md)." },
+      },
+      required: ["path"],
+    },
+  },
+};
+
+/** Режим «курилка»: get_agent_info + read_docs_file/write_docs_file (только docs). */
 export const TOOLS_CHAT: ToolDefinition[] = [
   ...TOOLS_FOR_LLM.filter((t) => t.function.name === "get_agent_info"),
+  READ_DOCS_FILE,
   WRITE_DOCS_FILE,
 ];
 
