@@ -99,7 +99,8 @@ export async function requestGoogleNative(
 
   const base = (baseUrl ?? "").replace(/\/$/, "");
   const baseNative = base.replace(/\/v1beta\/openai.*$/i, "/v1beta").replace(/\/openai.*$/i, "") || "https://generativelanguage.googleapis.com/v1beta";
-  const url = `${baseNative}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const urlBase = `${baseNative}/models/${model}:generateContent`;
+  const url = `${urlBase}?key=${encodeURIComponent(apiKey)}`;
 
   const systemMessages = messages.filter((m) => m.role === "system");
   const systemInstruction = systemMessages.length
@@ -132,6 +133,9 @@ export async function requestGoogleNative(
   const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
   try {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
+    // Поправка «грамматики» запроса: передаём ключ и как x-goog-api-key, и (для внешних прокси) в Authorization.
+    headers["x-goog-api-key"] = apiKey;
+    headers.Authorization = `Bearer ${apiKey}`;
     const fetchOptions: RequestInit & { dispatcher?: import("undici").Dispatcher } = {
       method: "POST",
       headers,

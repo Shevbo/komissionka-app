@@ -103,11 +103,9 @@ export async function request(
     let lastError: Error | null = null;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        // Для нативного клиента Google игнорируем HTTP‑прокси: запрос идёт напрямую на generativelanguage.googleapis.com.
-        return await requestGoogleNative(messages, tools, {
-          ...options,
-          proxyUrl: undefined,
-        });
+        // Для нативного клиента Google снова разрешаем HTTP‑прокси (если задан proxyUrl),
+        // чтобы можно было использовать внешний прокси‑шлюз.
+        return await requestGoogleNative(messages, tools, options);
       } catch (e) {
         lastError = e instanceof Error ? e : new Error(String(e));
         const canRetry =

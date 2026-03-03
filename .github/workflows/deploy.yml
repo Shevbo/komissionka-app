@@ -1,0 +1,32 @@
+# Deploy Komissionka to VPS on push to main (or manual run).
+# Server must have repo cloned in ~/komissionka and .env configured.
+# Required GitHub secrets: DEPLOY_HOST, DEPLOY_USER, SSH_PRIVATE_KEY.
+
+name: Deploy to Hoster
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            cd ~/komissionka
+            git fetch origin
+            git reset --hard origin/main
+            npm ci
+            npx prisma generate
+            npx prisma migrate deploy
+            npm run build
+            pm2 restart komissionka agent bot
+            pm2 list
