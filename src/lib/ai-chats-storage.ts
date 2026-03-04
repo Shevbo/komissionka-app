@@ -147,25 +147,9 @@ export async function saveAiChats(data: AiChatsData): Promise<void> {
 
   try {
     await trySaveToIndexedDB(sessions, activeId);
-    clearLegacyLocalStorage();
   } catch (err) {
-    const isQuota = err instanceof DOMException && (err.name === "QuotaExceededError" || err.name === "UnknownError");
-    if (isQuota && sessions.length > 1) {
-      sessions = [...sessions].sort((a, b) => a.createdAt - b.createdAt);
-      while (sessions.length > 1) {
-        sessions.shift();
-        if (activeId && !sessions.some((x) => x.id === activeId)) {
-          activeId = sessions[0]?.id ?? null;
-        }
-        try {
-          await trySaveToIndexedDB(sessions, activeId);
-          clearLegacyLocalStorage();
-          return;
-        } catch {
-          /* продолжаем удалять */
-        }
-      }
-    }
+    // Не удаляем старые сессии автоматически: если IndexedDB переполнен или недоступен,
+    // сохраняем полный набор чатов в localStorage как резервную копию.
     saveToLocalStorage(sessions, activeId);
   }
 }
