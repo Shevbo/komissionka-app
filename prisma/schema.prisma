@@ -104,6 +104,8 @@ model site_settings {
   h_banner            Int?     @db.SmallInt
   news_banner_height  Int?     @db.SmallInt
   news_scroll_speed   Int?     @db.SmallInt
+  catalog_min_columns Int?     @db.SmallInt
+  catalog_max_card_width Int?  @db.SmallInt
   agent_llm_model     String?  @db.VarChar(255)
   agent_mode          String?  @db.VarChar(50)
 }

@@ -130,17 +130,21 @@ export async function GET(request: Request) {
       created_at: r.created_at?.toISOString() ?? null,
       details: r.details,
     })),
-    siteSettings: siteSettings ? {
-      key: siteSettings.key,
-      hero_title: siteSettings.hero_title,
-      hero_subtitle: siteSettings.hero_subtitle,
-      hero_image_url: siteSettings.hero_image_url,
-      h_banner: siteSettings.h_banner,
-      news_banner_height: siteSettings.news_banner_height,
-      news_scroll_speed: siteSettings.news_scroll_speed,
-      agent_llm_model: siteSettings.agent_llm_model,
-      agent_mode: siteSettings.agent_mode,
-    } : null,
+    siteSettings: siteSettings
+      ? {
+          key: siteSettings.key,
+          hero_title: siteSettings.hero_title,
+          hero_subtitle: siteSettings.hero_subtitle,
+          hero_image_url: siteSettings.hero_image_url,
+          h_banner: siteSettings.h_banner,
+          news_banner_height: siteSettings.news_banner_height,
+          news_scroll_speed: siteSettings.news_scroll_speed,
+          catalog_min_columns: siteSettings.catalog_min_columns,
+          catalog_max_card_width: siteSettings.catalog_max_card_width,
+          agent_llm_model: siteSettings.agent_llm_model,
+          agent_mode: siteSettings.agent_mode,
+        }
+      : null,
     news: news.map((n) => ({
       ...n,
       created_at: n.created_at?.toISOString() ?? null,

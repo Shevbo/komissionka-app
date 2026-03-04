@@ -9,6 +9,8 @@ const defaultSettings = {
   h_banner: 200,
   news_banner_height: 200,
   news_scroll_speed: 3,
+  catalog_min_columns: 2,
+  catalog_max_card_width: 360,
 };
 
 export async function getHomeData() {
@@ -53,6 +55,8 @@ export async function getHomeData() {
           h_banner: settings.h_banner ?? defaultSettings.h_banner,
           news_banner_height: settings.news_banner_height ?? defaultSettings.news_banner_height,
           news_scroll_speed: settings.news_scroll_speed ?? defaultSettings.news_scroll_speed,
+          catalog_min_columns: settings.catalog_min_columns ?? defaultSettings.catalog_min_columns,
+          catalog_max_card_width: settings.catalog_max_card_width ?? defaultSettings.catalog_max_card_width,
         }
       : defaultSettings,
     news: news ?? [],

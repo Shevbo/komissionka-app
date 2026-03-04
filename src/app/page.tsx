@@ -72,6 +72,8 @@ export default async function Home() {
   const hBanner = settings.h_banner ?? 200;
   const newsBannerHeight = (settings as { news_banner_height?: number }).news_banner_height ?? 200;
   const newsScrollSpeed = (settings as { news_scroll_speed?: number }).news_scroll_speed ?? 3;
+  const catalogMinColumns = (settings as { catalog_min_columns?: number }).catalog_min_columns ?? 2;
+  const catalogMaxCardWidth = (settings as { catalog_max_card_width?: number }).catalog_max_card_width ?? 360;
   const heroImageUrl =
     settings.hero_image_url?.trim() ? settings.hero_image_url : null;
 
@@ -146,6 +148,8 @@ export default async function Home() {
             is_auction: item.is_auction ?? null,
             author_name: item.profiles?.full_name ?? null,
           }))}
+          minColumns={catalogMinColumns}
+          maxCardWidth={catalogMaxCardWidth}
         />
 
         {/* Отзывы */}

@@ -18,9 +18,11 @@ export type HomeCatalogItem = {
 
 type Props = {
   items: HomeCatalogItem[];
+  minColumns?: number | null;
+  maxCardWidth?: number | null;
 };
 
-export function HomeCatalogSection({ items }: Props) {
+export function HomeCatalogSection({ items, minColumns, maxCardWidth }: Props) {
   const [searchQuery, setSearchQuery] = useState("");
 
   return (
@@ -40,6 +42,8 @@ export function HomeCatalogSection({ items }: Props) {
         initialItems={items}
         loadError={null}
         searchQuery={searchQuery}
+        minColumns={minColumns}
+        maxCardWidth={maxCardWidth}
       />
     </section>
   );

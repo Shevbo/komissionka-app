@@ -1,4 +1,4 @@
-# Рабочая документация на приложение «Комиссионка» вер. 1.2.2
+# Рабочая документация на приложение «Комиссионка» вер. 1.4.0
 
 ## Оглавление
 
@@ -69,7 +69,7 @@ src/
 | Сервис товара | [src/services/itemService.ts](../src/services/itemService.ts) | Поиск товара, сообщения |
 | API товаров | [src/app/api/items/route.ts](../src/app/api/items/route.ts), [src/app/api/items/[id]/route.ts](../src/app/api/items/[id]/route.ts) | CRUD, batch |
 | Картинки | [src/lib/image-url.ts](../src/lib/image-url.ts) | `resolveImageUrl()` — `/uploads/` → полный URL (APP_BASE_URL) |
-| Компоненты | [src/components/catalog-grid.tsx](../src/components/catalog-grid.tsx), [src/components/item-card-animated.tsx](../src/components/item-card-animated.tsx), [src/components/HomeCatalogSection.tsx](../src/components/HomeCatalogSection.tsx) | Сетка, карточки. В `catalog-grid.tsx` заданы параметры `MIN_MOBILE_COLUMNS` (минимальное число колонок на телефонах, 1–4) и `MAX_CARD_WIDTH_PX` (максимальная ширина карточки в пикселях), чтобы управлять плотностью сетки и не допускать чрезмерно крупных карточек на широких экранах. |
+| Компоненты | [src/components/catalog-grid.tsx](../src/components/catalog-grid.tsx), [src/components/item-card-animated.tsx](../src/components/item-card-animated.tsx), [src/components/HomeCatalogSection.tsx](../src/components/HomeCatalogSection.tsx) | Сетка, карточки. В `catalog-grid.tsx` используются параметры `catalog_min_columns` (минимальное число колонок на телефонах, 1–4) и `catalog_max_card_width` (максимальная ширина карточки в пикселях), которые задаются через таблицу `site_settings` и редактируются администратором во вкладке «Контент» админ‑панели. Это позволяет управлять плотностью сетки и не допускать чрезмерно крупных карточек на широких экранах без изменения кода. |
 | Страница товара | [src/app/items/[id]/page.tsx](../src/app/items/[id]/page.tsx), [src/app/items/[id]/ItemPageContent.tsx](../src/app/items/[id]/ItemPageContent.tsx) | Детали, чат |
 
 ### 3.3 Корзина
@@ -93,7 +93,7 @@ src/
 | Данные панели | [src/app/api/admin/data/route.ts](../src/app/api/admin/data/route.ts) | Единый GET: counts, items, news, testimonials, site_settings и др. |
 | Новости | [src/app/api/admin/news/route.ts](../src/app/api/admin/news/route.ts), `[id]/route.ts` | CRUD |
 | Отзывы | [src/app/api/admin/testimonials/route.ts](../src/app/api/admin/testimonials/route.ts), `[id]/route.ts` | CRUD |
-| Настройки сайта | [src/app/api/admin/site-settings/route.ts](../src/app/api/admin/site-settings/route.ts) | hero, баннер, agent_llm_model, agent_mode |
+| Настройки сайта | [src/app/api/admin/site-settings/route.ts](../src/app/api/admin/site-settings/route.ts) | hero, баннеры, параметры каталога (`catalog_min_columns`, `catalog_max_card_width`), agent_llm_model, agent_mode; редактируются во вкладке «Контент» админ‑панели |
 | Роли | [src/app/api/admin/profiles/[id]/role/route.ts](../src/app/api/admin/profiles/[id]/role/route.ts) | Обновление role (защита от снятия admin с себя) |
 | Привязка Telegram | [src/app/api/admin/telegram-bind-code/route.ts](../src/app/api/admin/telegram-bind-code/route.ts) | Генерация кода привязки |
 
@@ -160,7 +160,7 @@ src/
 | `messages` | Сообщения по товару (item_id, sender_id, content, attachments) |
 | `cart_items` | Корзина (user_id, product_id) — составной PK |
 | `user_activity` | Логи активности |
-| `site_settings` | Настройки сайта (hero, баннеры, agent_llm_model, agent_mode) |
+| `site_settings` | Настройки сайта (hero‑заголовки и изображение, размеры баннеров, скорость автоскролла новостей, параметры сетки каталога `catalog_min_columns` и `catalog_max_card_width`, agent_llm_model, agent_mode) |
 | `news` | Новости |
 | `testimonials` | Отзывы |
 | `telegram_bind_code` | Коды привязки Telegram (code, profile_id, expires_at) |

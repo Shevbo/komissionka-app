@@ -18,20 +18,20 @@ type Props = {
   initialItems: Item[];
   loadError: string | null;
   searchQuery: string;
+  minColumns?: number | null;
+  maxCardWidth?: number | null;
 };
 
-// Минимальное количество колонок на небольших экранах (телефоны).
-// Допустимые значения: 1–4.
-const MIN_MOBILE_COLUMNS = 2;
-
-// Максимальная ширина карточки товара (px) — чтобы на очень широких мониторах
-// карточки не растягивались на всю ширину.
-const MAX_CARD_WIDTH_PX = 360;
+// Значения по умолчанию для сетки каталога (если не заданы через настройки сайта/админку).
+const DEFAULT_MIN_MOBILE_COLUMNS = 2;
+const DEFAULT_MAX_CARD_WIDTH_PX = 360;
 
 export function CatalogGrid({
   initialItems,
   loadError,
   searchQuery,
+  minColumns,
+  maxCardWidth,
 }: Props) {
   const [items, setItems] = useState<Item[]>(initialItems);
 
@@ -58,10 +58,17 @@ export function CatalogGrid({
   }
 
   const gridTemplateColumns = useMemo(() => {
-    const cols = Math.min(Math.max(MIN_MOBILE_COLUMNS, 1), 4);
-    // Минимальная ширина колонки: не больше MAX_CARD_WIDTH_PX и не больше 1/cols ширины контейнера.
-    return `repeat(auto-fit, minmax(min(${MAX_CARD_WIDTH_PX}px, ${100 / cols}%), 1fr))`;
-  }, []);
+    const effectiveMinColumns = Math.min(
+      Math.max((minColumns ?? DEFAULT_MIN_MOBILE_COLUMNS) || DEFAULT_MIN_MOBILE_COLUMNS, 1),
+      4
+    );
+    const effectiveMaxCardWidth = Math.max(
+      200,
+      Math.min((maxCardWidth ?? DEFAULT_MAX_CARD_WIDTH_PX) || DEFAULT_MAX_CARD_WIDTH_PX, 600)
+    );
+    // Минимальная ширина колонки: не больше effectiveMaxCardWidth и не больше 1/effectiveMinColumns ширины контейнера.
+    return `repeat(auto-fit, minmax(min(${effectiveMaxCardWidth}px, ${100 / effectiveMinColumns}%), 1fr))`;
+  }, [minColumns, maxCardWidth]);
 
   return (
     <div

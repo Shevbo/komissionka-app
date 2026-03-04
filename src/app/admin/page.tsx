@@ -76,6 +76,8 @@ type SiteSettings = {
   h_banner: number | null;
   news_banner_height: number | null;
   news_scroll_speed: number | null;
+  catalog_min_columns?: number | null;
+  catalog_max_card_width?: number | null;
   agent_llm_model?: string | null;
   agent_mode?: string | null;
 };
@@ -129,6 +131,8 @@ export default function AdminPage() {
     h_banner: 200,
     news_banner_height: 200,
     news_scroll_speed: 3,
+    catalog_min_columns: 2,
+    catalog_max_card_width: 360,
   });
   const [heroImageFile, setHeroImageFile] = useState<File | null>(null);
   const [heroPreviewKey, setHeroPreviewKey] = useState(0);
@@ -374,6 +378,8 @@ export default function AdminPage() {
         h_banner: data.siteSettings.h_banner ?? 200,
         news_banner_height: data.siteSettings.news_banner_height ?? 200,
         news_scroll_speed: data.siteSettings.news_scroll_speed ?? 3,
+        catalog_min_columns: data.siteSettings.catalog_min_columns ?? 2,
+        catalog_max_card_width: data.siteSettings.catalog_max_card_width ?? 360,
       });
     }
     setNews(data.news ?? []);
@@ -558,6 +564,14 @@ export default function AdminPage() {
     const h_banner = contentForm.h_banner > 0 ? contentForm.h_banner : 200;
     const news_banner_height = contentForm.news_banner_height > 0 ? contentForm.news_banner_height : 200;
     const news_scroll_speed = contentForm.news_scroll_speed >= 0 ? contentForm.news_scroll_speed : 3;
+    const catalog_min_columns =
+      typeof contentForm.catalog_min_columns === "number"
+        ? Math.min(Math.max(contentForm.catalog_min_columns, 1), 4)
+        : 2;
+    const catalog_max_card_width =
+      typeof contentForm.catalog_max_card_width === "number"
+        ? Math.max(200, Math.min(contentForm.catalog_max_card_width, 600))
+        : 360;
 
     try {
       let hero_image_url = contentForm.hero_image_url;
@@ -582,6 +596,8 @@ export default function AdminPage() {
           hero_image_url: hero_image_url || undefined,
           news_banner_height,
           news_scroll_speed,
+          catalog_min_columns,
+          catalog_max_card_width,
         }),
       });
       if (!res.ok) throw new Error((await res.json()).error);
@@ -1181,6 +1197,64 @@ export default function AdminPage() {
                     placeholder="3"
                     className="w-24"
                   />
+                </div>
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <div>
+                    <Label htmlFor="catalog_min_columns">Минимальное число колонок каталога на телефоне (1–4)</Label>
+                    <Input
+                      id="catalog_min_columns"
+                      type="text"
+                      inputMode="numeric"
+                      value={contentForm.catalog_min_columns}
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(/\D/g, "");
+                        if (raw === "") {
+                          setContentForm((f) => ({ ...f, catalog_min_columns: 2 }));
+                          return;
+                        }
+                        const v = parseInt(raw, 10);
+                        if (!Number.isNaN(v)) {
+                          const clamped = Math.min(Math.max(v, 1), 4);
+                          setContentForm((f) => ({ ...f, catalog_min_columns: clamped }));
+                        }
+                      }}
+                      onBlur={(e) => {
+                        const v = parseInt(e.target.value.replace(/\D/g, ""), 10);
+                        const num = Number.isNaN(v) ? 2 : Math.min(Math.max(v, 1), 4);
+                        setContentForm((f) => ({ ...f, catalog_min_columns: num }));
+                      }}
+                      placeholder="2"
+                      className="w-24"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="catalog_max_card_width">Максимальная ширина карточки каталога (px)</Label>
+                    <Input
+                      id="catalog_max_card_width"
+                      type="text"
+                      inputMode="numeric"
+                      value={contentForm.catalog_max_card_width}
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(/\D/g, "");
+                        if (raw === "") {
+                          setContentForm((f) => ({ ...f, catalog_max_card_width: 360 }));
+                          return;
+                        }
+                        const v = parseInt(raw, 10);
+                        if (!Number.isNaN(v)) {
+                          const clamped = Math.max(200, Math.min(v, 600));
+                          setContentForm((f) => ({ ...f, catalog_max_card_width: clamped }));
+                        }
+                      }}
+                      onBlur={(e) => {
+                        const v = parseInt(e.target.value.replace(/\D/g, ""), 10);
+                        const num = Number.isNaN(v) ? 360 : Math.max(200, Math.min(v, 600));
+                        setContentForm((f) => ({ ...f, catalog_max_card_width: num }));
+                      }}
+                      placeholder="360"
+                      className="w-32"
+                    />
+                  </div>
                 </div>
                 <div>
                   <Label>Hero-изображение</Label>
