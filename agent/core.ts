@@ -14,7 +14,7 @@ import { getSystemPrompt, getSystemPromptForChat } from "./llm/system-prompt.js"
 import { getConfig } from "./config.js";
 import { parseModelIdWithModality, shouldRequestImageOutput, isOpenRouterModelId } from "./lib/model-utils.js";
 import { TOOLS_FOR_LLM, TOOLS_CHAT, TOOLS_CONSULT, executeTool, RUN_COMMAND_DISALLOWED_PREFIX } from "./tools/index.js";
-import { consumePending, generateCode, setPending, type PendingApproval, type PendingVerification } from "./approval-store.js";
+import { consumePending, generateCode, setPending, refreshPendingShown, type PendingApproval, type PendingVerification } from "./approval-store.js";
 import { buildReportFooter, readVersions, countWordsForFooter } from "./lib/report-footer.js";
 import { getServicesStatus } from "./lib/services-status.js";
 
@@ -283,6 +283,10 @@ export async function runAgentCore(
     msgs?: Array<{ role: string; content: string | unknown; tool_calls?: unknown }>,
     servicesStatusOverride?: { app: boolean; agent: boolean; bot: boolean }
   ): RunAgentCoreResult {
+    if (mode === "dev") {
+      const codeMatch = msg.match(/(?:подтвердите\s+кодом|код\s*подтверждения)\s*:\s*(\d{4})/i);
+      if (codeMatch) refreshPendingShown(codeMatch[1]!);
+    }
     const inputOverride = msgs && msgs.length > 0 ? computeInputSize(msgs) : undefined;
     if (mode === "dev") {
       const inputSerialized = msgs && msgs.length > 0

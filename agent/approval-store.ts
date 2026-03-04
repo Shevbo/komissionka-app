@@ -1,8 +1,10 @@
 /**
  * Хранилище ожидающих подтверждений в режиме «Разработка».
  * Защита от случайного выполнения: 4-значный код, таймаут 30 минут.
- * Состояние сохраняется в файл .agent/pending-codes.json, чтобы коды оставались
- * действительными после перезапуска агента (деплой, pm2 restart).
+ * Таймаут считается от последнего показа кода пользователю (lastShownAt), а не от создания:
+ * если пользователь уточняет план в диалоге, каждый новый пост модели с «Подтвердите кодом: XXXX»
+ * сдвигает отсчёт, чтобы 30 минут были на согласование после последней просьбы ввести код.
+ * Состояние сохраняется в .agent/pending-codes.json (коды переживают перезапуск агента).
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
@@ -23,6 +25,8 @@ export interface PendingApproval {
   /** Пути файлов для бэкапа (из write_file) */
   filesToBackup: string[];
   createdAt: number;
+  /** Когда в последний раз показывали код пользователю (от этого момента считается TTL). */
+  lastShownAt?: number;
 }
 
 export interface PendingVerification {
@@ -33,9 +37,16 @@ export interface PendingVerification {
   /** Результат выполнения для отчёта */
   executionResult: string;
   createdAt: number;
+  /** Когда в последний раз показывали код пользователю (от этого момента считается TTL). */
+  lastShownAt?: number;
 }
 
 export type Pending = PendingApproval | PendingVerification;
+
+/** Момент, от которого считается TTL: последний показ кода или создание. */
+function ttlStart(p: Pending): number {
+  return p.lastShownAt ?? p.createdAt;
+}
 
 const store = new Map<string, Pending>();
 
@@ -57,7 +68,7 @@ function loadStore(): void {
     const data = JSON.parse(raw) as Record<string, Pending>;
     const now = Date.now();
     for (const [code, p] of Object.entries(data)) {
-      if (p && typeof p.createdAt === "number" && now - p.createdAt <= APPROVAL_TTL_MS) {
+      if (p && typeof p.createdAt === "number" && now - ttlStart(p) <= APPROVAL_TTL_MS) {
         store.set(code, p);
       }
     }
@@ -86,7 +97,7 @@ function cleanupExpired(): void {
   const now = Date.now();
   let changed = false;
   for (const [code, p] of store.entries()) {
-    if (now - p.createdAt > APPROVAL_TTL_MS) {
+    if (now - ttlStart(p) > APPROVAL_TTL_MS) {
       store.delete(code);
       changed = true;
     }
@@ -99,11 +110,22 @@ export function generateCode(): string {
   return String(1000 + Math.floor(Math.random() * 9000));
 }
 
-/** Сохраняет ожидание подтверждения (в память и в файл). */
+/** Сохраняет ожидание подтверждения (в память и в файл). При создании lastShownAt = now. */
 export function setPending(code: string, pending: Pending): void {
   ensureLoaded();
   cleanupExpired();
+  const now = Date.now();
+  (pending as Pending & { lastShownAt?: number }).lastShownAt = now;
   store.set(code, pending);
+  saveStore();
+}
+
+/** Обновляет момент последнего показа кода (ответ модели с «Подтвердите кодом: XXXX»). TTL считается от него. */
+export function refreshPendingShown(code: string): void {
+  ensureLoaded();
+  const p = store.get(code);
+  if (!p) return;
+  (p as Pending & { lastShownAt?: number }).lastShownAt = Date.now();
   saveStore();
 }
 
@@ -118,7 +140,7 @@ export function consumePending(code: string): ConsumeResult | undefined {
   cleanupExpired();
   const p = store.get(code);
   if (!p) return undefined;
-  const expired = Date.now() - p.createdAt > APPROVAL_TTL_MS;
+  const expired = Date.now() - ttlStart(p) > APPROVAL_TTL_MS;
   store.delete(code);
   saveStore();
   return { pending: p, expired };
@@ -130,7 +152,7 @@ export function hasPending(code: string): boolean {
   cleanupExpired();
   const p = store.get(code);
   if (!p) return false;
-  if (Date.now() - p.createdAt > APPROVAL_TTL_MS) {
+  if (Date.now() - ttlStart(p) > APPROVAL_TTL_MS) {
     store.delete(code);
     saveStore();
     return false;
