@@ -154,14 +154,6 @@ export function ItemCardAnimated({ item, index, cardPaddingPx, titleFontPx, text
             className="space-y-1 pt-0"
             style={cardPaddingPx != null ? { padding: cardPaddingPx, paddingTop: 0 } : undefined}
           >
-            {item.author_name && (
-              <p
-                className="text-muted-foreground"
-                style={textFontPx != null ? { fontSize: `${textFontPx}px` } : undefined}
-              >
-                Продавец: {item.author_name}
-              </p>
-            )}
             <div className="flex items-baseline gap-2">
               {item.sale_price != null ? (
                 <>
@@ -214,9 +206,9 @@ export function ItemCardAnimated({ item, index, cardPaddingPx, titleFontPx, text
                   trackAction("add_to_cart", item.id);
                 }
               }}
+              aria-label={inCart ? "Товар уже в корзине" : "Добавить в корзину"}
             >
               <ShoppingCart className="h-4 w-4" />
-              {inCart ? "В корзине" : "В корзину"}
             </Button>
           </CardContent>
         </Card>
