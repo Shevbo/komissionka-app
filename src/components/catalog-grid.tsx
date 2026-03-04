@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { ItemCardAnimated } from "komiss/components/item-card-animated";
 
 type Item = {
@@ -19,6 +19,14 @@ type Props = {
   loadError: string | null;
   searchQuery: string;
 };
+
+// Минимальное количество колонок на небольших экранах (телефоны).
+// Допустимые значения: 1–4.
+const MIN_MOBILE_COLUMNS = 2;
+
+// Максимальная ширина карточки товара (px) — чтобы на очень широких мониторах
+// карточки не растягивались на всю ширину.
+const MAX_CARD_WIDTH_PX = 360;
 
 export function CatalogGrid({
   initialItems,
@@ -49,8 +57,17 @@ export function CatalogGrid({
     );
   }
 
+  const gridTemplateColumns = useMemo(() => {
+    const cols = Math.min(Math.max(MIN_MOBILE_COLUMNS, 1), 4);
+    // Минимальная ширина колонки: не больше MAX_CARD_WIDTH_PX и не больше 1/cols ширины контейнера.
+    return `repeat(auto-fit, minmax(min(${MAX_CARD_WIDTH_PX}px, ${100 / cols}%), 1fr))`;
+  }, []);
+
   return (
-    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    <div
+      className="grid gap-6 justify-center"
+      style={{ gridTemplateColumns }}
+    >
       {displayItems.map((item, index) => (
         <ItemCardAnimated key={item.id} item={item} index={index} />
       ))}

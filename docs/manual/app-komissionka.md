@@ -69,7 +69,7 @@ src/
 | Сервис товара | [src/services/itemService.ts](../src/services/itemService.ts) | Поиск товара, сообщения |
 | API товаров | [src/app/api/items/route.ts](../src/app/api/items/route.ts), [src/app/api/items/[id]/route.ts](../src/app/api/items/[id]/route.ts) | CRUD, batch |
 | Картинки | [src/lib/image-url.ts](../src/lib/image-url.ts) | `resolveImageUrl()` — `/uploads/` → полный URL (APP_BASE_URL) |
-| Компоненты | [src/components/catalog-grid.tsx](../src/components/catalog-grid.tsx), [src/components/item-card-animated.tsx](../src/components/item-card-animated.tsx), [src/components/HomeCatalogSection.tsx](../src/components/HomeCatalogSection.tsx) | Сетка, карточки |
+| Компоненты | [src/components/catalog-grid.tsx](../src/components/catalog-grid.tsx), [src/components/item-card-animated.tsx](../src/components/item-card-animated.tsx), [src/components/HomeCatalogSection.tsx](../src/components/HomeCatalogSection.tsx) | Сетка, карточки. В `catalog-grid.tsx` заданы параметры `MIN_MOBILE_COLUMNS` (минимальное число колонок на телефонах, 1–4) и `MAX_CARD_WIDTH_PX` (максимальная ширина карточки в пикселях), чтобы управлять плотностью сетки и не допускать чрезмерно крупных карточек на широких экранах. |
 | Страница товара | [src/app/items/[id]/page.tsx](../src/app/items/[id]/page.tsx), [src/app/items/[id]/ItemPageContent.tsx](../src/app/items/[id]/ItemPageContent.tsx) | Детали, чат |
 
 ### 3.3 Корзина

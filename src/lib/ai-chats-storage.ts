@@ -9,7 +9,8 @@ const STORE = "sessions";
 const LEGACY_KEY = "komiss_ai_chats";
 
 export type ChatMessageRow = { role: "user" | "assistant"; content: string; timestamp?: number };
-export type AiChatSession = { id: string; title: string; messages: ChatMessageRow[]; createdAt: number };
+export type AiChatMode = "chat" | "consult" | "dev";
+export type AiChatSession = { id: string; title: string; messages: ChatMessageRow[]; createdAt: number; mode: AiChatMode };
 
 export type AiChatsData = { sessions: AiChatSession[]; activeId: string | null };
 
@@ -33,6 +34,47 @@ function openDb(): Promise<IDBDatabase> {
 
 const DATA_KEY = "chats";
 
+function normalizeSessions(rawSessions: unknown[]): AiChatSession[] {
+  return rawSessions.map((s, idx) => {
+    const obj = (s ?? {}) as {
+      id?: unknown;
+      title?: unknown;
+      messages?: unknown;
+      createdAt?: unknown;
+      mode?: unknown;
+    };
+    const id =
+      typeof obj.id === "string" && obj.id.trim()
+        ? obj.id
+        : `ai_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 9)}`;
+    const title = typeof obj.title === "string" && obj.title.trim() ? obj.title : "Новый чат";
+    const createdAt =
+      typeof obj.createdAt === "number" && Number.isFinite(obj.createdAt)
+        ? obj.createdAt
+        : Date.now();
+    const modeValue = obj.mode;
+    const mode: AiChatMode =
+      modeValue === "chat" || modeValue === "consult" || modeValue === "dev"
+        ? modeValue
+        : "consult";
+    const rawMessages = Array.isArray(obj.messages) ? obj.messages : [];
+    const messages: ChatMessageRow[] = rawMessages
+      .map((m) => {
+        const mm = m as { role?: unknown; content?: unknown; timestamp?: unknown };
+        const role = mm.role === "assistant" ? "assistant" : "user";
+        const content = typeof mm.content === "string" ? mm.content : "";
+        if (!content) return null;
+        const ts =
+          typeof mm.timestamp === "number" && Number.isFinite(mm.timestamp)
+            ? mm.timestamp
+            : undefined;
+        return ts != null ? { role, content, timestamp: ts } : { role, content };
+      })
+      .filter((m): m is ChatMessageRow => m !== null);
+    return { id, title, messages, createdAt, mode };
+  });
+}
+
 export async function loadAiChats(): Promise<AiChatsData | null> {
   if (!hasIndexedDB()) return loadFromLocalStorage();
   try {
@@ -47,7 +89,8 @@ export async function loadAiChats(): Promise<AiChatsData | null> {
     if (!raw) return migrateFromLocalStorage();
     const data = JSON.parse(raw) as AiChatsData;
     if (!data || !Array.isArray(data.sessions)) return migrateFromLocalStorage();
-    return data;
+    const sessions = normalizeSessions(data.sessions);
+    return { sessions, activeId: data.activeId ?? null };
   } catch {
     return loadFromLocalStorage();
   }
@@ -59,7 +102,8 @@ function loadFromLocalStorage(): AiChatsData | null {
     if (!raw) return null;
     const data = JSON.parse(raw) as AiChatsData;
     if (!data || !Array.isArray(data.sessions)) return null;
-    return data;
+    const sessions = normalizeSessions(data.sessions);
+    return { sessions, activeId: data.activeId ?? null };
   } catch {
     return null;
   }
@@ -132,9 +176,10 @@ export function migrateFromLocalStorage(): AiChatsData | null {
   try {
     const raw = localStorage.getItem(LEGACY_KEY);
     if (!raw) return null;
-    const data = JSON.parse(raw) as { sessions?: AiChatSession[]; activeId?: string | null };
+    const data = JSON.parse(raw) as { sessions?: unknown[]; activeId?: string | null };
     if (!Array.isArray(data.sessions) || data.sessions.length === 0) return null;
-    return { sessions: data.sessions, activeId: data.activeId ?? null };
+    const sessions = normalizeSessions(data.sessions);
+    return { sessions, activeId: data.activeId ?? null };
   } catch {
     return null;
   }

@@ -148,7 +148,7 @@ export default function AdminPage() {
 
   // Комиссионка AI chat: сессии в IndexedDB (до 4ГБ) или localStorage, до ручного удаления
   type ChatMessageRow = { role: "user" | "assistant"; content: string; timestamp?: number };
-  type AiChatSession = { id: string; title: string; messages: ChatMessageRow[]; createdAt: number };
+  type AiChatSession = { id: string; title: string; messages: ChatMessageRow[]; createdAt: number; mode: AiMode };
   const AI_MODE_STORAGE_KEY = "komiss_ai_mode";
 
   const [aiSessions, setAiSessions] = useState<AiChatSession[]>([]);
@@ -200,8 +200,8 @@ export default function AdminPage() {
   const [adminTab, setAdminTab] = useState("items");
 
   const activeAiSession = useMemo(
-    () => aiSessions.find((s) => s.id === activeAiSessionId) ?? null,
-    [aiSessions, activeAiSessionId]
+    () => aiSessions.find((s) => s.id === activeAiSessionId && s.mode === aiMode) ?? null,
+    [aiSessions, activeAiSessionId, aiMode]
   );
   const aiMessages = activeAiSession?.messages ?? [];
 
@@ -228,28 +228,51 @@ export default function AdminPage() {
       loadAiChats().then((data) => {
         if (cancelled) return;
         if (data && Array.isArray(data.sessions) && data.sessions.length > 0) {
-          setAiSessions(data.sessions);
-          if (data.activeId && data.sessions.some((s) => s.id === data.activeId)) {
-            setActiveAiSessionId(data.activeId);
-          } else {
-            setActiveAiSessionId(data.sessions[0].id);
-          }
+          // Нормализация: сессии уже содержат mode (ai-chats-storage нормализует),
+          // но на всякий случай задаём consult по умолчанию.
+          const normalized = data.sessions.map((s) => ({
+            ...s,
+            mode: s.mode === "chat" || s.mode === "consult" || s.mode === "dev" ? s.mode : "consult",
+          })) as AiChatSession[];
+          setAiSessions(normalized);
+          const firstForMode =
+            (data.activeId && normalized.find((s) => s.id === data.activeId && s.mode === aiMode)) ||
+            normalized.find((s) => s.mode === aiMode) ||
+            normalized[0];
+          setActiveAiSessionId(firstForMode?.id ?? null);
         } else {
           const id = `ai_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-          setAiSessions([{ id, title: "Новый чат", messages: [], createdAt: Date.now() }]);
+          setAiSessions([{ id, title: "Новый чат", messages: [], createdAt: Date.now(), mode: aiMode }]);
           setActiveAiSessionId(id);
         }
         setAiChatsLoaded(true);
       }).catch(() => {
         if (cancelled) return;
         const id = `ai_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-        setAiSessions([{ id, title: "Новый чат", messages: [], createdAt: Date.now() }]);
+        setAiSessions([{ id, title: "Новый чат", messages: [], createdAt: Date.now(), mode: aiMode }]);
         setActiveAiSessionId(id);
         setAiChatsLoaded(true);
       });
     });
     return () => { cancelled = true; };
   }, []);
+
+  // При смене режима используем отдельные чаты:
+  // если для режима уже есть сессия — активируем её; иначе создаём новую.
+  useEffect(() => {
+    if (!aiChatsLoaded) return;
+    const current = aiSessions.find((s) => s.id === activeAiSessionId && s.mode === aiMode);
+    if (current) return;
+    const firstForMode = aiSessions.find((s) => s.mode === aiMode);
+    if (firstForMode) {
+      setActiveAiSessionId(firstForMode.id);
+      return;
+    }
+    const id = `ai_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    const session: AiChatSession = { id, title: "Новый чат", messages: [], createdAt: Date.now(), mode: aiMode };
+    setAiSessions((prev) => [session, ...prev]);
+    setActiveAiSessionId(id);
+  }, [aiMode, aiChatsLoaded, aiSessions, activeAiSessionId]);
 
   const persistAiChats = useCallback(() => {
     import("komiss/lib/ai-chats-storage").then(({ saveAiChats }) => {
@@ -275,10 +298,10 @@ export default function AdminPage() {
 
   const createNewAiChat = useCallback(() => {
     const id = `ai_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-    const session: AiChatSession = { id, title: "Новый чат", messages: [], createdAt: Date.now() };
+    const session: AiChatSession = { id, title: "Новый чат", messages: [], createdAt: Date.now(), mode: aiMode };
     setAiSessions((prev) => [session, ...prev]);
     setActiveAiSessionId(id);
-  }, []);
+  }, [aiMode]);
 
   const clearCurrentAiChat = useCallback(() => {
     if (!activeAiSessionId) return;
