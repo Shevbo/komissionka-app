@@ -124,6 +124,21 @@ export function findFiles(pattern: string): FindFilesOutput {
     return { ok: false, pattern, error: "Некорректная маска." };
   }
   const firstDir = parts[0];
+  const isGlobAll = firstDir === "**";
+  if (isGlobAll) {
+    // Паттерн вида "**/route.ts" — ищем во всех разрешённых каталогах и объединяем результаты
+    const rest = parts.slice(1);
+    if (rest.length === 0) {
+      return { ok: false, pattern, error: "Некорректная маска (после ** должен быть путь к файлу)." };
+    }
+    const results: string[] = [];
+    for (const prefix of ALLOWED_PREFIXES) {
+      const subPattern = [prefix, ...rest].join("/");
+      const out = findFiles(subPattern);
+      if (out.ok) results.push(...out.files);
+    }
+    return { ok: true, pattern, files: [...new Set(results)].sort() };
+  }
   if (!ALLOWED_PREFIXES.some((p) => p === firstDir || firstDir!.startsWith(p))) {
     return { ok: false, pattern, error: "Поиск разрешён только в каталогах: src, prisma, docs, agent, public, telegram-bot, scripts, .cursor." };
   }
