@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ShoppingCart, FileText, Trash2 } from "lucide-react";
+import { ShoppingCart, FileText, Trash2, Plus, Bell, Heart, Menu } from "lucide-react";
 import { Button } from "komiss/components/ui/button";
 import { AuthDialog } from "komiss/components/AuthDialog";
 import {
@@ -28,6 +28,7 @@ export function Navbar() {
   const { user, profile, userRole, loading, authDialogOpen, setAuthDialogOpen, signOut } = useAuth();
   const [loadingTimedOut, setLoadingTimedOut] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const { items, removeItem, totalPrice } = useCart();
 
   useEffect(() => {
@@ -55,34 +56,64 @@ export function Navbar() {
     <>
       <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <Link href="/" className="text-lg font-semibold">
-            Комиссионка
-          </Link>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            {user && (
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-9 w-9"
+                aria-label="Меню пользователя"
+                onClick={() => setUserMenuOpen(true)}
+              >
+                <Menu className="h-4 w-4" />
+              </Button>
+            )}
+            <Link href="/" className="text-lg font-semibold">
+              Комиссионка
+            </Link>
+          </div>
+          <div className="flex items-center gap-2">
             {showSkeleton ? (
               <div className="h-9 w-20 animate-pulse rounded-md bg-muted" />
             ) : user ? (
               <>
-                <Link
-                  href="/profile"
-                  className="text-sm font-medium text-foreground hover:underline"
-                >
-                  {displayName ?? "Пользователь"}
-                </Link>
-                <Button asChild variant="outline" size="sm">
-                  <Link href="/seller">Выставить вещь</Link>
-                </Button>
-                {userRole === "admin" && (
-                  <Button asChild variant="outline" size="sm">
-                    <Link href="/admin">Админ. Консоль</Link>
-                  </Button>
-                )}
                 <Button
                   variant="outline"
+                  size="icon"
+                  className="h-9 w-9"
+                  asChild
+                  aria-label="Выставить вещь"
+                  title="Выставить вещь"
+                >
+                  <Link href="/seller">
+                    <Plus className="h-4 w-4" />
+                  </Link>
+                </Button>
+                <Link
+                  href="/seller"
+                  className="hidden text-sm font-medium text-foreground hover:underline xs:inline"
+                >
+                  Мои вещи
+                </Link>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9"
+                  asChild
+                  aria-label="Уведомления"
+                  title="Уведомления"
+                >
+                  <Link href="/profile">
+                    <Bell className="h-4 w-4" />
+                  </Link>
+                </Button>
+                <Button
+                  variant="ghost"
                   size="icon"
                   className="relative h-9 w-9"
                   onClick={() => setCartOpen(true)}
                   aria-label="Корзина"
+                  title="Корзина"
                 >
                   <ShoppingCart className="h-4 w-4" />
                   {items.length > 0 && (
@@ -95,18 +126,28 @@ export function Navbar() {
                     </span>
                   )}
                 </Button>
-                <Button variant="ghost" size="sm" onClick={handleSignOut}>
-                  Выйти
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9"
+                  asChild
+                  aria-label="Избранное"
+                  title="Избранное"
+                >
+                  <Link href="/profile?tab=favorites">
+                    <Heart className="h-4 w-4" />
+                  </Link>
                 </Button>
               </>
             ) : (
               <>
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="icon"
                   className="relative h-9 w-9"
                   onClick={() => setCartOpen(true)}
                   aria-label="Корзина"
+                  title="Корзина"
                 >
                   <ShoppingCart className="h-4 w-4" />
                   {items.length > 0 && (
@@ -124,6 +165,68 @@ export function Navbar() {
         </div>
       </header>
       <AuthDialog open={authDialogOpen} onOpenChange={setAuthDialogOpen} />
+      {/* Меню пользователя (бургер слева) */}
+      <Sheet open={userMenuOpen} onOpenChange={setUserMenuOpen}>
+        <SheetContent side="left" className="flex flex-col p-0">
+          <SheetHeader className="border-b p-4">
+            <SheetTitle>Профиль</SheetTitle>
+          </SheetHeader>
+          <div className="flex-1 space-y-4 p-4 text-sm">
+            {user ? (
+              <>
+                <div className="rounded-md border bg-muted/40 px-3 py-2">
+                  <p className="text-xs text-muted-foreground">Вы вошли как</p>
+                  <p className="truncate text-sm font-medium">
+                    {displayName ?? user.email ?? "Пользователь"}
+                  </p>
+                </div>
+                <nav className="space-y-1">
+                  <Link
+                    href="/profile"
+                    className="block rounded-md px-3 py-2 hover:bg-muted"
+                    onClick={() => setUserMenuOpen(false)}
+                  >
+                    Профиль
+                  </Link>
+                  <Link
+                    href="/seller"
+                    className="block rounded-md px-3 py-2 hover:bg-muted"
+                    onClick={() => setUserMenuOpen(false)}
+                  >
+                    Мои вещи
+                  </Link>
+                  {userRole === "admin" && (
+                    <Link
+                      href="/admin"
+                      className="block rounded-md px-3 py-2 hover:bg-muted"
+                      onClick={() => setUserMenuOpen(false)}
+                    >
+                      Админ. Консоль
+                    </Link>
+                  )}
+                </nav>
+                <div className="border-t pt-3">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-start text-red-600 hover:bg-red-50"
+                    onClick={() => {
+                      setUserMenuOpen(false);
+                      handleSignOut();
+                    }}
+                  >
+                    Выйти
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground px-3 py-2">
+                Войдите, чтобы управлять профилем и товарами.
+              </p>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
       <Sheet open={cartOpen} onOpenChange={setCartOpen}>
         <SheetContent side="right" className="flex flex-col p-0">
           <SheetHeader className="border-b p-4">
