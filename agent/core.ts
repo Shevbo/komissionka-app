@@ -14,7 +14,7 @@ import { getSystemPrompt, getSystemPromptForChat } from "./llm/system-prompt.js"
 import { getConfig } from "./config.js";
 import { parseModelIdWithModality, shouldRequestImageOutput, isOpenRouterModelId } from "./lib/model-utils.js";
 import { TOOLS_FOR_LLM, TOOLS_CHAT, TOOLS_CONSULT, executeTool, RUN_COMMAND_DISALLOWED_PREFIX } from "./tools/index.js";
-import { consumePending, generateCode, setPending, refreshPendingShown, type PendingApproval, type PendingVerification } from "./approval-store.js";
+import { consumePending, generateCode, setPending, refreshPendingShown, type Pending, type PendingApproval, type PendingVerification } from "./approval-store.js";
 import { buildReportFooter, readVersions, countWordsForFooter } from "./lib/report-footer.js";
 import { getServicesStatus } from "./lib/services-status.js";
 
@@ -342,7 +342,14 @@ export async function runAgentCore(
         ? trimmedPrompt
         : /(?:код\s*:?\s*|подтвержд\w*\s*:?\s*)?(\d{4})\s*$/i.exec(trimmedPrompt)?.[1];
     if (codeMatch) {
-      const cr = consumePending(codeMatch);
+      let cr: { pending: Pending; expired: boolean } | undefined;
+      try {
+        cr = consumePending(codeMatch);
+      } catch (loadErr) {
+        const msg = loadErr instanceof Error ? loadErr.message : String(loadErr);
+        appendLog(`Ошибка при загрузке кода подтверждения: ${msg}`);
+        return makeReturn("Ошибка при проверке кода подтверждения. Повторите запрос или задайте новый план.\n\nДетали: " + msg);
+      }
       if (!cr) return makeReturn("Неверный или несуществующий код подтверждения.");
       const { pending, expired } = cr;
       if (expired && pending.kind === "verification") {
@@ -359,10 +366,15 @@ export async function runAgentCore(
       }
       if (pending.kind === "approval") {
         const pa = pending as PendingApproval;
+        const toolCalls = Array.isArray(pa.toolCalls) ? pa.toolCalls : [];
+        const filesToBackup = Array.isArray(pa.filesToBackup) ? pa.filesToBackup : [];
+        if (toolCalls.length === 0 || filesToBackup.length === 0) {
+          return makeReturn("Ошибка: нет действий для выполнения (неверная структура сохранённого плана). Повторите запрос с новым планом.");
+        }
         try {
-          appendLog(`Подтверждение получено, выполняю ${pa.toolCalls.length} действий`);
+          appendLog(`Подтверждение получено, выполняю ${toolCalls.length} действий`);
           pushStep({ type: "llm", text: "Резервная копия", detail: "Перед выполнением изменений" });
-          const backupCmd = `npx tsx scripts/agent-backup.ts backup ${pa.filesToBackup.join(" ")}`;
+          const backupCmd = `npx tsx scripts/agent-backup.ts backup ${filesToBackup.join(" ")}`;
           const backupRes = await executeTool("run_command", { command: backupCmd });
           let backupId = "";
           const idMatch = backupRes.match(/"backupId"\s*:\s*"([^"]+)"/);
@@ -372,7 +384,7 @@ export async function runAgentCore(
           }
 
           const execResults: string[] = [];
-          for (const tc of pa.toolCalls) {
+          for (const tc of toolCalls) {
             let args: Record<string, unknown> = {};
             try {
               args = typeof tc.arguments === "string" ? (JSON.parse(tc.arguments) as Record<string, unknown>) : {};
