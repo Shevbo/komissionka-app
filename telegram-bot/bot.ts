@@ -311,7 +311,8 @@ async function callAgentWithSteps(
   mode: "chat" | "consult" | "dev",
   onStep: (steps: StepItem[], formatted: string) => void,
   modelOverride?: { model: string; baseUrl?: string; apiKey?: string } | null,
-  meta?: { userAccount?: string; chatName?: string }
+  meta?: { userAccount?: string; chatName?: string },
+  inputImages?: string[]
 ): Promise<{ result: string; steps: StepItem[] }> {
   const url = `http://127.0.0.1:${AGENT_PORT}/run?stream=1`;
   const body: Record<string, unknown> = {
@@ -321,6 +322,7 @@ async function callAgentWithSteps(
     environment: "telegram",
     ...(meta?.userAccount ? { userAccount: meta.userAccount } : {}),
     ...(meta?.chatName ? { chatName: meta.chatName } : {}),
+    ...(inputImages && inputImages.length ? { inputImages } : {}),
   };
   if (modelOverride) {
     body.model = modelOverride.model;
@@ -420,12 +422,33 @@ async function bindTelegramByCode(opts: {
   return (data && (data.message as string)) || "Telegram привязан.";
 }
 
+async function downloadPhotoAsDataUrl(fileId: string): Promise<string | null> {
+  try {
+    const file = await bot.getFile(fileId);
+    if (!file.file_path) return null;
+    const url = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${file.file_path}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const arrayBuf = await res.arrayBuffer();
+    const buf = Buffer.from(arrayBuf);
+    if (buf.length === 0) return null;
+    const base64 = buf.toString("base64");
+    // Telegram photo обычно jpeg
+    const mimeType = "image/jpeg";
+    return `data:${mimeType};base64,${base64}`;
+  } catch {
+    return null;
+  }
+}
+
 bot.on("message", async (msg) => {
   const chatId = msg.chat.id;
   const from = msg.from;
   const text = msg.text?.trim();
+  const hasPhoto = Array.isArray(msg.photo) && msg.photo.length > 0;
+  const caption = msg.caption?.trim();
 
-  if (!from || !text) {
+  if (!from) {
     return;
   }
 
@@ -435,7 +458,7 @@ bot.on("message", async (msg) => {
     select: { id: true, full_name: true, email: true, role: true },
   });
 
-  // /start и /help
+  // /start и /help — только для текстовых сообщений
   if (text === "/start" || text === "/help") {
     const welcomeText = [
       "👋 Бот «Спринт Комиссионки».",
@@ -456,8 +479,8 @@ bot.on("message", async (msg) => {
   }
 
   const ctx = profile ? await fetchBotContext() : null;
-  const isModeButton = text === "⚙️ Режим" || text === "Курилка" || text === "Консультация" || text.includes("Разработка");
-  const isProjectButton = text === "📁 Проект" || text.startsWith("📁 ");
+  const isModeButton = text === "⚙️ Режим" || text === "Курилка" || text === "Консультация" || text?.includes("Разработка");
+  const isProjectButton = text === "📁 Проект" || text?.startsWith("📁 ");
 
   if (profile && (text === BTN_MODEL || text === "/model")) {
     try {
@@ -606,7 +629,7 @@ bot.on("message", async (msg) => {
   }
 
   // Сообщение с кодом привязки вида КОМ-XXXXXX
-  const codeMatch = text.match(/КОМ-[0-9A-Z]{4,}/i);
+  const codeMatch = text?.match(/КОМ-[0-9A-Z]{4,}/i);
   if (codeMatch) {
     const code = codeMatch[0].toUpperCase();
     try {
@@ -628,6 +651,11 @@ bot.on("message", async (msg) => {
     return;
   }
 
+  // Ни текста, ни фото — ничего не делаем
+  if (!profile && !hasPhoto && !text) {
+    return;
+  }
+
   if (!profile) {
     await bot.sendMessage(
       chatId,
@@ -645,8 +673,30 @@ bot.on("message", async (msg) => {
     const config = await fetchAgentConfig();
     const modelOverride = configToModelOverride(config);
     const mode = config?.mode ?? "consult";
+
+    // Подготовка входных картинок (если есть)
+    let inputImages: string[] | undefined;
+    if (hasPhoto) {
+      const photos = msg.photo!;
+      const largest = photos[photos.length - 1]!;
+      const dataUrl = await downloadPhotoAsDataUrl(largest.file_id);
+      if (dataUrl) {
+        inputImages = [dataUrl];
+      }
+    }
+
+    const userPrompt =
+      text ||
+      caption ||
+      (hasPhoto ? "Проанализируй вложенное изображение, присланное пользователем." : "");
+
+    if (!userPrompt) {
+      await bot.sendMessage(chatId, "Пустой запрос. Добавьте текст или подпись к изображению.");
+      return;
+    }
+
     const { result, steps } = await callAgentWithSteps(
-      text,
+      userPrompt,
       mode,
       async (stepsArr, formatted) => {
         if (stepsMsg && formatted.length <= 4000) {
@@ -664,7 +714,8 @@ bot.on("message", async (msg) => {
       {
         userAccount: profile.id,
         chatName: `telegram:${chatId}`,
-      }
+      },
+      inputImages
     );
 
     // Финальное обновление сообщения: ход выполнения + кратко «Готово»

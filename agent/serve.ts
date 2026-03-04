@@ -47,6 +47,11 @@ interface ParsedRequest {
   userAccount?: string | null;
   chatName?: string | null;
   environment?: string;
+  /**
+   * Входные изображения (например, data URL из админки или Telegram).
+   * data — base64 без data:-префикса.
+   */
+  inputImages?: Array<{ mimeType: string; data: string }>;
 }
 
 function parseRequest(body: string): ParsedRequest | null {
@@ -91,6 +96,28 @@ function parseRequest(body: string): ParsedRequest | null {
       const environment = "environment" in data && typeof (data as { environment?: unknown }).environment === "string"
         ? (data as { environment: string }).environment.trim()
         : undefined;
+
+      let inputImages: Array<{ mimeType: string; data: string }> | undefined;
+      if ("inputImages" in data) {
+        const raw = (data as { inputImages?: unknown }).inputImages;
+        if (Array.isArray(raw)) {
+          const parsed: Array<{ mimeType: string; data: string }> = [];
+          for (const item of raw) {
+            if (typeof item === "string") {
+              const m = /^data:(image\/[a-zA-Z0-9.+-]+);\s*base64\s*,\s*(.+)$/.exec(item.trim());
+              if (m) {
+                parsed.push({ mimeType: m[1], data: m[2] });
+              }
+            } else if (item && typeof item === "object") {
+              const obj = item as { mimeType?: unknown; data?: unknown };
+              const mime = typeof obj.mimeType === "string" && obj.mimeType.trim() ? obj.mimeType.trim() : "image/png";
+              const d = typeof obj.data === "string" && obj.data.trim() ? obj.data.trim() : "";
+              if (d) parsed.push({ mimeType: mime, data: d });
+            }
+          }
+          if (parsed.length > 0) inputImages = parsed;
+        }
+      }
       return {
         prompt,
         history,
@@ -101,6 +128,7 @@ function parseRequest(body: string): ParsedRequest | null {
         userAccount,
         chatName: chatName || undefined,
         environment: environment || undefined,
+        inputImages,
       };
     }
   } catch {
@@ -214,6 +242,7 @@ async function handleRun(req: import("node:http").IncomingMessage, res: import("
           userAccount: parsed.userAccount,
           chatName: parsed.chatName,
           environment: parsed.environment,
+          inputImages: parsed.inputImages,
         });
         send("done", { result, logId: logId ?? null });
         console.log("[agent] runAgent done");
@@ -245,6 +274,7 @@ async function handleRun(req: import("node:http").IncomingMessage, res: import("
         userAccount: parsed.userAccount,
         chatName: parsed.chatName,
         environment: parsed.environment,
+        inputImages: parsed.inputImages,
       });
       console.log("[agent] runAgent done");
       safeEnd(res, 200, JSON.stringify({ result, steps: steps ?? [], logId: logId ?? null }));

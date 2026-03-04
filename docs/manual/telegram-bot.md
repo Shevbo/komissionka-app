@@ -69,7 +69,7 @@ telegram-bot/
 | Этап | Описание |
 |------|----------|
 | Конфиг | `fetchAgentConfig()` — GET /api/agent/selected-model (модель, режим). |
-| Запрос | POST к `http://127.0.0.1:AGENT_PORT/run` с `{ prompt, history?, mode, modelOverride }`. |
+| Запрос | POST к `http://127.0.0.1:AGENT_PORT/run` с `{ prompt, history?, mode, modelOverride, inputImages? }`. Для сообщений с фото бот скачивает изображение и передаёт его как data URL в `inputImages`. |
 | Заголовок | `Authorization: Bearer AGENT_API_KEY`. |
 | Парсинг ответа | `parseResultSegments()` — разбивка на текст и изображения `![alt](url)`. |
 | Отправка | `sendResultSegments()` — текст по 4096 символов, картинки — sendPhoto (локальный файл, URL или base64). |
@@ -88,6 +88,7 @@ telegram-bot/
 - `/api/uploads/agent/<filename>` — доступ к картинкам, сгенерированным агентом.
 - Локальный путь: `public/uploads/agent/<filename>`.
 - Поддержка `data:image/...;base64,...` и `http(s)://` URL.
+- Входные картинки: если админ отправляет боту сообщение с фото (с подписью или без), бот скачивает изображение через Telegram API, кодирует в `data:image/jpeg;base64,...` и передаёт в агент как `inputImages`. Модели Gemini получают картинку как inlineData и могут анализировать её содержимое.
 
 ### 3.7 Ход выполнения
 

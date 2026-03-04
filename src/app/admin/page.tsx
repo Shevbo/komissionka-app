@@ -156,6 +156,7 @@ export default function AdminPage() {
   const [aiChatsLoaded, setAiChatsLoaded] = useState(false);
   const [aiInput, setAiInput] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiInputImageDataUrl, setAiInputImageDataUrl] = useState<string | null>(null);
   const [aiLastSteps, setAiLastSteps] = useState<Array<{
     type: string;
     text: string;
@@ -193,6 +194,7 @@ export default function AdminPage() {
   const [hasOpenRouterKey, setHasOpenRouterKey] = useState(false);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
+  const [adminTopMenuOpen, setAdminTopMenuOpen] = useState(false);
 
   /** Активная вкладка админки (для прокрутки чата при открытии «Комиссионка AI»). */
   const [adminTab, setAdminTab] = useState("items");
@@ -678,9 +680,10 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-zinc-50">
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-          <div className="mb-8 flex items-center justify-between">
+        <div className="mb-8 flex items-center justify-between gap-3">
           <h1 className="text-2xl font-bold text-zinc-900">Панель управления</h1>
-          <div className="flex items-center gap-2">
+          {/* Десктопная панель действий */}
+          <div className="hidden items-center gap-2 sm:flex">
             <Button variant="outline" size="sm" onClick={() => fetchAdminData()}>
               Обновить
             </Button>
@@ -699,9 +702,74 @@ export default function AdminPage() {
                 Файлы
               </Link>
             </Button>
-            <Link href="/" className="text-sm text-zinc-600 hover:text-zinc-900">
+            <Link href="/" className="text-sm text-zinc-600 hover:text-zinc-900 whitespace-nowrap">
               ← На главную
             </Link>
+          </div>
+          {/* Мобильное бургер-меню */}
+          <div className="relative sm:hidden">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9"
+              type="button"
+              aria-label="Меню действий админки"
+              onClick={() => setAdminTopMenuOpen((v) => !v)}
+            >
+              <span className="flex flex-col items-center justify-center gap-0.5">
+                <span className="h-0.5 w-4 rounded bg-zinc-800" />
+                <span className="h-0.5 w-4 rounded bg-zinc-800" />
+                <span className="h-0.5 w-4 rounded bg-zinc-800" />
+              </span>
+            </Button>
+            {adminTopMenuOpen && (
+              <div className="absolute right-0 z-20 mt-2 w-44 rounded-md border border-zinc-200 bg-white shadow-lg">
+                <button
+                  type="button"
+                  className="block w-full px-3 py-2 text-left text-sm hover:bg-zinc-50"
+                  onClick={() => {
+                    setAdminTopMenuOpen(false);
+                    fetchAdminData();
+                  }}
+                >
+                  Обновить
+                </button>
+                <Link
+                  href="/admin/prisma-studio"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block w-full px-3 py-2 text-left text-sm hover:bg-zinc-50"
+                  onClick={() => setAdminTopMenuOpen(false)}
+                >
+                  Prisma Studio
+                </Link>
+                <Link
+                  href="/admin/terminal"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block w-full px-3 py-2 text-left text-sm hover:bg-zinc-50"
+                  onClick={() => setAdminTopMenuOpen(false)}
+                >
+                  Терминал
+                </Link>
+                <Link
+                  href="/admin/files"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block w-full px-3 py-2 text-left text-sm hover:bg-zinc-50"
+                  onClick={() => setAdminTopMenuOpen(false)}
+                >
+                  Файлы
+                </Link>
+                <Link
+                  href="/"
+                  className="block w-full px-3 py-2 text-left text-sm hover:bg-zinc-50"
+                  onClick={() => setAdminTopMenuOpen(false)}
+                >
+                  ← На главную
+                </Link>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1379,7 +1447,7 @@ export default function AdminPage() {
                     onSubmit={async (e) => {
                             e.preventDefault();
                             const text = aiInput.trim();
-                            if (!text || aiLoading || !activeAiSessionId) return;
+                            if ((!text && !aiInputImageDataUrl) || aiLoading || !activeAiSessionId) return;
                             const imageRequestPattern = /\b(нарисуй|картинку|изображени[ея]|сгенерируй\s+(картинку|изображение)|draw|picture|image|generate\s+(an?\s+)?(image|picture))\b/i;
                             if (imageRequestPattern.test(text) && selectedAgentModel && !isImageCapableModel(selectedAgentModel)) {
                               toast.warning("Для генерации изображений выберите Nano Banana или Nano Banana Pro в списке моделей.");
@@ -1388,9 +1456,17 @@ export default function AdminPage() {
                               const truncated = text.length > 80 ? `${text.slice(0, 80)}…` : text;
                               if (!window.confirm(`⚠️ ВНИМАНИЕ! Прямой доступ к коду.\n\nВы уверены, что хотите отправить запрос «${truncated}» в режиме «Разработка»?`)) return;
                             }
+                            const userPromptForAgent =
+                              text || (aiInputImageDataUrl ? "Проанализируй вложенное изображение, приложенное к запросу." : "");
                             setAiInput("");
-                            setAiMessagesForCurrentSession((prev) => [...prev, { role: "user", content: text, timestamp: Date.now() }]);
-                            updateActiveSessionTitle(text);
+                            const userVisible =
+                              text ||
+                              (aiInputImageDataUrl ? "[запрос с вложенным изображением без подписи]" : "");
+                            setAiMessagesForCurrentSession((prev) => [
+                              ...prev,
+                              { role: "user", content: userVisible || userPromptForAgent, timestamp: Date.now() },
+                            ]);
+                            updateActiveSessionTitle(userPromptForAgent);
                             setAiLoading(true);
                             setAiLastSteps([]);
                             setAiLastLogId(null);
@@ -1398,7 +1474,7 @@ export default function AdminPage() {
                             let stepsAccumulator: StepItem[] = [];
                             const historyForRequest = activeAiSession?.messages ?? [];
                             const controller = new AbortController();
-                            const AGENT_TIMEOUT_MS = 3 * 60_000;
+                            const AGENT_TIMEOUT_MS = aiMode === "dev" ? 10 * 60_000 : 3 * 60_000;
                             const timeoutId = window.setTimeout(() => controller.abort(), AGENT_TIMEOUT_MS);
                             try {
                               const res = await fetch("/api/admin/agent/run", {
@@ -1406,12 +1482,13 @@ export default function AdminPage() {
                                 credentials: "include",
                                 headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
                                 body: JSON.stringify({
-                                  prompt: text,
+                                  prompt: userPromptForAgent,
                                   history: historyForRequest,
-                                  stream: false,
+                                  stream: true,
                                   mode: aiMode,
                                   project: "Комиссионка",
                                   chatName: activeAiSession?.title ?? undefined,
+                                  inputImages: aiInputImageDataUrl ? [aiInputImageDataUrl] : undefined,
                                 }),
                                 signal: controller.signal,
                               });
@@ -1462,11 +1539,12 @@ export default function AdminPage() {
                               }
                             } catch (err) {
                               if (err instanceof DOMException && err.name === "AbortError") {
+                                const minutes = AGENT_TIMEOUT_MS / 60_000;
                                 setAiMessagesForCurrentSession((prev) => [
                                   ...prev,
                                   {
                                     role: "assistant",
-                                    content: "Агент не ответил в течение 3 минут, запрос прерван. Попробуйте ещё раз или уточните задачу.",
+                                    content: `Агент не ответил в течение ${minutes} минут, запрос прерван. Попробуйте ещё раз или уточните задачу.`,
                                     timestamp: Date.now(),
                                   },
                                 ]);
@@ -1479,25 +1557,60 @@ export default function AdminPage() {
                             } finally {
                               window.clearTimeout(timeoutId);
                               setAiLoading(false);
+                              setAiInputImageDataUrl(null);
                             }
                           }}
                         >
-                          <Textarea
-                            value={aiInput}
-                            onChange={(e) => setAiInput(e.target.value)}
-                            placeholder="Сообщение"
-                            className="min-h-[40px] max-h-24 min-w-0 flex-1 resize-none rounded-2xl border-0 bg-white px-4 py-2.5 text-[15px] shadow-sm focus-visible:ring-2"
-                            disabled={aiLoading}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" && !e.shiftKey) {
-                                e.preventDefault();
-                                (e.currentTarget.form as HTMLFormElement | null)?.requestSubmit();
-                              }
-                            }}
-                          />
+                          <div className="flex flex-1 flex-col gap-1">
+                            <Textarea
+                              value={aiInput}
+                              onChange={(e) => setAiInput(e.target.value)}
+                              placeholder="Сообщение"
+                              className="min-h-[40px] max-h-24 min-w-0 flex-1 resize-none rounded-2xl border-0 bg-white px-4 py-2.5 text-[15px] shadow-sm focus-visible:ring-2"
+                              disabled={aiLoading}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && !e.shiftKey) {
+                                  e.preventDefault();
+                                  (e.currentTarget.form as HTMLFormElement | null)?.requestSubmit();
+                                }
+                              }}
+                            />
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs text-muted-foreground">
+                                {aiInputImageDataUrl ? "Вложено изображение" : "Можно прикрепить изображение"}
+                              </span>
+                              <Input
+                                type="file"
+                                accept="image/*"
+                                className="h-8 max-w-[220px] cursor-pointer border-dashed text-xs"
+                                disabled={aiLoading}
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (!file) {
+                                    setAiInputImageDataUrl(null);
+                                    return;
+                                  }
+                                  const reader = new FileReader();
+                                  reader.onerror = () => {
+                                    setAiInputImageDataUrl(null);
+                                    toast.error("Не удалось прочитать файл изображения");
+                                  };
+                                  reader.onload = () => {
+                                    if (typeof reader.result === "string") {
+                                      setAiInputImageDataUrl(reader.result);
+                                    } else {
+                                      setAiInputImageDataUrl(null);
+                                      toast.error("Неверный формат файла изображения");
+                                    }
+                                  };
+                                  reader.readAsDataURL(file);
+                                }}
+                              />
+                            </div>
+                          </div>
                           <Button
                             type="submit"
-                            disabled={aiLoading || !aiInput.trim()}
+                            disabled={aiLoading || (!aiInput.trim() && !aiInputImageDataUrl)}
                             className="h-10 w-10 shrink-0 rounded-full bg-[#25D366] p-0 text-white hover:bg-[#20BD5A]"
                             title="Отправить"
                           >

@@ -100,6 +100,8 @@ export async function POST(req: Request) {
     mode?: string;
     project?: string;
     chatName?: string;
+    /** Входные изображения: data URL или объекты { mimeType, data }. */
+    inputImages?: unknown;
   };
   try {
     body = await req.json();
@@ -164,6 +166,10 @@ export async function POST(req: Request) {
     userAccount,
     chatName: typeof body.chatName === "string" ? body.chatName.trim() : undefined,
     environment: "admin",
+    ...(Array.isArray((body as { inputImages?: unknown }).inputImages) &&
+    (body as { inputImages?: unknown[] }).inputImages!.length
+      ? { inputImages: (body as { inputImages?: unknown[] }).inputImages }
+      : {}),
   };
   const bodyStr = JSON.stringify(agentBody);
   const timeoutMs = 620_000;

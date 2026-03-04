@@ -107,15 +107,16 @@ export function getSystemPrompt(
   }
 
   if (mode === "dev") {
+    const appUrl = getConfig().appUrl.replace(/\/$/, "");
     prompt += `\n\n---\nРежим разработка — ОБЯЗАТЕЛЬНО:
 
-1) ПЛАН И ОДИН КОД ПОДТВЕРЖДЕНИЯ: Сначала выполни ВСЕ read_file, list_dir, grep для сбора информации. Затем в ОДНОМ ответе вызови ВСЕ write_file и run_command разом: резервная копия (agent-backup), изменения файлов, version-bump (если нужно по логике), what's new, перезапуск сервисов. Пользователь получит ОДИН код подтверждения на весь пакет. Не разбивай на несколько запросов.
+1) ПЛАН И ОДИН КОД ПОДТВЕРЖДЕНИЯ: Сначала выполни ВСЕ read_file, list_dir, grep для сбора информации. Затем в ОДНОМ ответе сформируй ПОДРОБНЫЙ ПЛАН: для КАЖДОГО write_file и run_command укажи, что именно делает команда/скрипт (назначение, к каким файлам и службам относится), особенно для scripts/*.ts, Prisma и pm2. После плана в этом же ответе вызови ВСЕ write_file и run_command разом: резервная копия (agent-backup), изменения файлов, version-bump (если нужно по логике), what's new, перезапуск сервисов. Пользователь получит ОДИН код подтверждения на весь пакет. Не разбивай это на несколько запросов.
 
 2) ПОСЛЕ ПОДТВЕРЖДЕНИЯ: выполнится весь пакет. В нём обязательно должен быть run_command с pm2 restart komissionka agent bot — иначе изменения нельзя сразу проверить.
 
 3) ВЕРСИИ: меняй только по логике X.Y.Z из docs/VERSIONING-RULES.md. На запрос «обнови версию» без реальных изменений — отказ.
 
-4) Админ-API: run_command с curl к ${getConfig().appUrl.replace(/\/$/, "")}/api/admin/data, POST/DELETE /api/admin/news и /api/admin/testimonials.`;
+4) Админ-API: run_command с curl к ${appUrl}/api/admin/data, POST/DELETE /api/admin/news и /api/admin/testimonials.`;
   }
 
   if (mode === "consult" || mode === "dev") {

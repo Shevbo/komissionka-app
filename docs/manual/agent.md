@@ -63,7 +63,7 @@
 
 | Файл | Описание |
 |------|----------|
-| agent/llm/index.ts | request() — маршрутизация Google / OpenAI |
+| agent/llm/index.ts | request() — маршрутизация Google / OpenAI; для Gemini поддерживает мультимодальный ввод через inlineData (inputImages) и вывод изображений |
 | agent/llm/system-prompt.ts | getSystemPrompt(), getSystemPromptForChat() — промпт по режиму (chat/consult/dev) |
 
 ### 3.5 Инструменты

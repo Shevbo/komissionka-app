@@ -119,7 +119,7 @@ src/
 |---------|------|----------|
 | Конфиг агента | [src/app/api/admin/agent/config/route.ts](../src/app/api/admin/agent/config/route.ts) | Настройки агента |
 | Кэш | [src/app/api/admin/agent/cache/route.ts](../src/app/api/admin/agent/cache/route.ts) | Просмотр кэша промптов |
-| Запуск | [src/app/api/admin/agent/run/route.ts](../src/app/api/admin/agent/run/route.ts) | Вызов агента из админки |
+| Запуск | [src/app/api/admin/agent/run/route.ts](../src/app/api/admin/agent/run/route.ts) | Вызов агента из админки (текстовый промпт + опциональные входные изображения через поле `inputImages`) |
 | Лог | [src/app/api/admin/agent/log/route.ts](../src/app/api/admin/agent/log/route.ts) | Последний лог рассуждений |
 | Модель | [src/app/api/admin/agent/model/route.ts](../src/app/api/admin/agent/model/route.ts) | Выбранная модель |
 | Публичный выбор модели | [src/app/api/agent/selected-model/route.ts](../src/app/api/agent/selected-model/route.ts) | Текущая модель (без авторизации) |

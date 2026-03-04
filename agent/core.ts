@@ -126,6 +126,11 @@ export interface RunAgentCoreOptions {
   modelOverride?: { model: string; baseUrl?: string; apiKey?: string };
   /** Отображаемое имя модели (для префикса, совпадает с dropdown). */
   modelDisplayName?: string;
+  /**
+   * Входные изображения от клиента (админка, Telegram).
+   * Каждый элемент — base64 (без data:-префикса) и MIME-типа.
+   */
+  inputImages?: Array<{ mimeType: string; data: string }>;
   /** Проект (например «Комиссионка»). Для подвала отчёта. */
   project?: string;
 }
@@ -501,6 +506,7 @@ export async function runAgentCore(
         thoughtSignature: lastThoughtSignature,
         thinkingLevel,
         responseModalitiesImage: requestImageOutput,
+        inputImages: options?.inputImages,
       });
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);

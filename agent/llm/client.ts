@@ -82,6 +82,12 @@ export interface LLMRequestOptions {
   thinkingLevel?: string;
   /** Включить вывод изображений (responseModalities: TEXT, IMAGE) для Gemini 2.5/3 при запросе картинки в промпте. */
   responseModalitiesImage?: boolean;
+  /**
+   * Входные изображения (inlineData) для моделей, поддерживающих мультимодальный ввод.
+   * Для Google Native (Gemini) используются как parts.inlineData в последнем пользовательском сообщении.
+   * data — строка base64 без data:-префикса.
+   */
+  inputImages?: Array<{ mimeType: string; data: string }>;
 }
 
 /**

@@ -47,6 +47,11 @@ export interface AgentOptions {
   chatName?: string | null;
   /** Среда вызова: admin, telegram, api. */
   environment?: string;
+  /**
+   * Входные изображения (например, фото из Telegram или вложения из админки).
+   * data — base64 без data:-префикса.
+   */
+  inputImages?: Array<{ mimeType: string; data: string }>;
 }
 
 export type { AgentStep } from "./core.js";
@@ -182,6 +187,7 @@ export async function runAgent(
         modelOverride: options?.modelOverride,
         modelDisplayName: options?.modelDisplayName,
         project,
+        inputImages: options?.inputImages,
       }),
       timeoutMs
     );

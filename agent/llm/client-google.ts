@@ -34,7 +34,8 @@ function openAiToolsToGemini(tools: unknown[]): { functionDeclarations: Array<{ 
 
 function messagesToContents(
   messages: ChatMessage[],
-  thoughtSignatureFromPrevious?: string
+  thoughtSignatureFromPrevious?: string,
+  inputImages?: Array<{ mimeType: string; data: string }>
 ): Array<{ role: "user" | "model"; parts: Part[] }> {
   const contents: Array<{ role: "user" | "model"; parts: Part[] }> = [];
   let toolResponseParts: Part[] = [];
@@ -86,6 +87,30 @@ function messagesToContents(
     }
   }
   flushToolResponses();
+
+  // При наличии входных изображений добавляем их к последнему пользовательскому сообщению
+  if (inputImages && inputImages.length > 0) {
+    // Ищем последнее сообщение с role === "user"
+    for (let i = contents.length - 1; i >= 0; i--) {
+      const c = contents[i]!;
+      if (c.role !== "user") continue;
+      for (const img of inputImages) {
+        if (!img || typeof img.data !== "string" || !img.data.trim()) continue;
+        const mime = img.mimeType && typeof img.mimeType === "string" ? img.mimeType : "image/png";
+        c.parts.push({ inlineData: { mimeType: mime, data: img.data } });
+      }
+      return contents;
+    }
+    // Если пользовательских сообщений нет (маловероятно) — добавим отдельное сообщение
+    const parts: Part[] = [];
+    for (const img of inputImages) {
+      if (!img || typeof img.data !== "string" || !img.data.trim()) continue;
+      const mime = img.mimeType && typeof img.mimeType === "string" ? img.mimeType : "image/png";
+      parts.push({ inlineData: { mimeType: mime, data: img.data } });
+    }
+    if (parts.length) contents.push({ role: "user", parts });
+  }
+
   return contents;
 }
 
@@ -107,7 +132,11 @@ export async function requestGoogleNative(
     ? { parts: [{ text: systemMessages.map((m) => m.content).join("\n\n") }] }
     : undefined;
   const restMessages = messages.filter((m) => m.role !== "system");
-  const contents = messagesToContents(restMessages, thoughtSignature);
+  const contents = messagesToContents(
+    restMessages,
+    thoughtSignature,
+    options.inputImages
+  );
 
   const generationConfig: Record<string, unknown> = { maxOutputTokens: maxTokens };
   if (options.thinkingLevel && typeof options.thinkingLevel === "string") {
