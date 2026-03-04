@@ -212,6 +212,11 @@ export async function runAgentCore(
     ? history.slice(-MAX_HISTORY_TURNS).filter((t) => t && (t.role === "user" || t.role === "assistant") && typeof t.content === "string")
     : [];
 
+  /** В режимах консультация/разработка системный промпт отправляем только при первом сообщении в чате; при последующих полагаемся на память модели. */
+  const isFirstTurnInChat = historyTurns.length === 0;
+  const sendSystemPrompt =
+    mode === "chat" ? false : (mode === "consult" || mode === "dev") ? isFirstTurnInChat : true;
+
   function appendLog(line: string): void {
     logEntries.push(`[${new Date().toISOString()}] ${line}`);
   }
@@ -228,7 +233,7 @@ export async function runAgentCore(
       const text = msgs.map((m) => (typeof m.content === "string" ? m.content : "")).join(" ");
       return { chars, words: countWordsForFooter(text) };
     }
-    const sysLen = mode === "chat" ? 0 : systemPrompt.length;
+    const sysLen = mode === "chat" ? 0 : sendSystemPrompt ? systemPrompt.length : 0;
     return {
       chars: sysLen + prompt.length + historyTurns.reduce((s, t) => s + t.content.length, 0),
       words: (sysLen ? countWordsForFooter(systemPrompt) : 0) + countWordsForFooter(prompt) + historyTurns.reduce((s, t) => s + countWordsForFooter(t.content), 0),
@@ -420,21 +425,31 @@ export async function runAgentCore(
           ...historyMessages,
           { role: "user", content: prompt },
         ]
-      : [
-          { role: "system", content: systemPrompt },
-          ...historyMessages,
-          { role: "user", content: prompt },
-        ];
+      : sendSystemPrompt
+        ? [
+            { role: "system", content: systemPrompt },
+            ...historyMessages,
+            { role: "user", content: prompt },
+          ]
+        : [
+            ...historyMessages,
+            { role: "user", content: prompt },
+          ];
 
+  const systemCharsInRequest = sendSystemPrompt ? systemPrompt.length : 0;
   const initInputChars =
-    (mode === "chat" ? 0 : systemPrompt.length) +
+    systemCharsInRequest +
     prompt.length +
     historyTurns.reduce((s, t) => s + t.content.length, 0);
   appendLog(`========== ПОЛНЫЙ ВВОД В МОДЕЛЬ ==========`);
-  appendLog(`Размеры: промпт ${prompt.length} симв., системный ${systemPrompt.length} симв., история ${historyTurns.length} реплик. Всего ~${initInputChars} симв.`);
+  appendLog(`Размеры: промпт ${prompt.length} симв., системный в запросе ${systemCharsInRequest} симв., история ${historyTurns.length} реплик. Всего ~${initInputChars} симв.`);
   if (mode !== "chat") {
-    appendLog(`--- СИСТЕМНЫЙ ПРОМПТ (первые ${Math.min(5000, systemPrompt.length)} симв.) ---`);
-    appendLog(systemPrompt.length > 5000 ? systemPrompt.slice(0, 5000) + `\n...[обрезано, всего ${systemPrompt.length} симв.]` : systemPrompt);
+    if (sendSystemPrompt) {
+      appendLog(`--- СИСТЕМНЫЙ ПРОМПТ (первые ${Math.min(5000, systemPrompt.length)} симв.) ---`);
+      appendLog(systemPrompt.length > 5000 ? systemPrompt.slice(0, 5000) + `\n...[обрезано, всего ${systemPrompt.length} симв.]` : systemPrompt);
+    } else {
+      appendLog("--- СИСТЕМНЫЙ ПРОМПТ: не отправляется (повторное сообщение в чате, модель уже в контексте) ---");
+    }
   } else {
     appendLog("--- РЕЖИМ КУРИЛКА: системный промпт НЕ используется ---");
   }
