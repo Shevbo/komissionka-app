@@ -2,11 +2,11 @@
 # Server must have repo cloned in ~/komissionka and .env configured.
 # Required GitHub secrets: DEPLOY_HOST, DEPLOY_USER, SSH_PRIVATE_KEY.
 
-name: Deploy to Hoster
+name: Deploy to Hoster (manual)
 
 on:
-  push:
-    branches: [main]
+  # Автодеплой при push отключён: основной путь деплоя — scripts/deploy-hoster-git.ps1 → deploy-from-git.sh.
+  # Оставляем только ручной запуск из UI GitHub (workflow_dispatch) как резервный вариант.
   workflow_dispatch:
 
 jobs:
