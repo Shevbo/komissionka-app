@@ -1691,8 +1691,7 @@ export default function AdminPage() {
                             ]);
                             updateActiveSessionTitle(userPromptForAgent);
                             setAiLoading(true);
-                            setAiLastSteps([]);
-                            setAiLastLogId(null);
+                            // Не очищаем ход выполнения и logId при отправке — они заменятся при первом step/done текущего запроса; при ошибке запроса останутся от предыдущего ответа
                             type StepItem = { type: string; text: string; detail?: string; requestSummary?: string; toolName?: string; toolArgs?: string; toolResultSummary?: string; success?: boolean };
                             let stepsAccumulator: StepItem[] = [];
                             const historyForRequest = activeAiSession?.messages ?? [];

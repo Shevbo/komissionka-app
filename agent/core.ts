@@ -359,56 +359,64 @@ export async function runAgentCore(
       }
       if (pending.kind === "approval") {
         const pa = pending as PendingApproval;
-        appendLog(`Подтверждение получено, выполняю ${pa.toolCalls.length} действий`);
-        pushStep({ type: "llm", text: "Резервная копия", detail: "Перед выполнением изменений" });
-        const backupCmd = `npx tsx scripts/agent-backup.ts backup ${pa.filesToBackup.join(" ")}`;
-        const backupRes = await executeTool("run_command", { command: backupCmd });
-        let backupId = "";
-        const idMatch = backupRes.match(/"backupId"\s*:\s*"([^"]+)"/);
-        if (idMatch) backupId = idMatch[1]!;
-        if (!backupId) {
-          return makeReturn("Ошибка создания резервной копии. Действия отменены. Попробуйте снова.");
-        }
-
-        const execResults: string[] = [];
-        for (const tc of pa.toolCalls) {
-          let args: Record<string, unknown> = {};
-          try {
-            args = JSON.parse(tc.arguments) as Record<string, unknown>;
-          } catch {
-            args = {};
+        try {
+          appendLog(`Подтверждение получено, выполняю ${pa.toolCalls.length} действий`);
+          pushStep({ type: "llm", text: "Резервная копия", detail: "Перед выполнением изменений" });
+          const backupCmd = `npx tsx scripts/agent-backup.ts backup ${pa.filesToBackup.join(" ")}`;
+          const backupRes = await executeTool("run_command", { command: backupCmd });
+          let backupId = "";
+          const idMatch = backupRes.match(/"backupId"\s*:\s*"([^"]+)"/);
+          if (idMatch) backupId = idMatch[1]!;
+          if (!backupId) {
+            return makeReturn("Ошибка создания резервной копии. Действия отменены. Попробуйте снова.");
           }
-          const res = await executeTool(tc.name, args);
-          execResults.push(`${tc.name}: ${res.slice(0, 200)}${res.length > 200 ? "…" : ""}`);
-          pushStep({
-            type: "tool",
-            text: tc.name,
-            detail: String(args.path ?? args.command ?? "").slice(0, 60),
-            toolName: tc.name,
-            toolArgs: tc.arguments,
-            toolResultSummary: res.slice(0, 80),
-            success: !res.includes("[error]"),
-          });
+
+          const execResults: string[] = [];
+          for (const tc of pa.toolCalls) {
+            let args: Record<string, unknown> = {};
+            try {
+              args = typeof tc.arguments === "string" ? (JSON.parse(tc.arguments) as Record<string, unknown>) : {};
+            } catch {
+              args = {};
+            }
+            const res = await executeTool(tc.name, args);
+            execResults.push(`${tc.name}: ${res.slice(0, 200)}${res.length > 200 ? "…" : ""}`);
+            pushStep({
+              type: "tool",
+              text: tc.name,
+              detail: String(args.path ?? args.command ?? "").slice(0, 60),
+              toolName: tc.name,
+              toolArgs: typeof tc.arguments === "string" ? tc.arguments : "",
+              toolResultSummary: res.slice(0, 80),
+              success: !res.includes("[error]"),
+            });
+          }
+
+          const verifyCode = generateCode();
+          setPending(verifyCode, {
+            kind: "verification",
+            code: verifyCode,
+            backupId,
+            executionResult: execResults.join("\n"),
+            createdAt: Date.now(),
+          } satisfies PendingVerification);
+
+          hadModifications = true;
+          const msg =
+            "Действия выполнены. Проверьте результат.\n\n" +
+            "Чтобы принять изменения — отправьте код: " +
+            verifyCode +
+            "\n\nЧтобы откатить — отправьте: откат " +
+            verifyCode +
+            "\n\nВремя на ответ: 30 минут. По истечении времени при следующем запросе код будет считаться истёкшим.";
+          return makeReturn(msg, true);
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          appendLog(`Ошибка при выполнении плана: ${errMsg}`);
+          return makeReturn(
+            "Ошибка при выполнении подтверждённого плана. Действия отменены.\n\nДетали: " + errMsg + "\n\nПроверьте логи агента и повторите запрос с новым планом."
+          );
         }
-
-        const verifyCode = generateCode();
-        setPending(verifyCode, {
-          kind: "verification",
-          code: verifyCode,
-          backupId,
-          executionResult: execResults.join("\n"),
-          createdAt: Date.now(),
-        } satisfies PendingVerification);
-
-        hadModifications = true;
-        const msg =
-          "Действия выполнены. Проверьте результат.\n\n" +
-          "Чтобы принять изменения — отправьте код: " +
-          verifyCode +
-          "\n\nЧтобы откатить — отправьте: откат " +
-          verifyCode +
-          "\n\nВремя на ответ: 30 минут. По истечении времени при следующем запросе код будет считаться истёкшим.";
-        return makeReturn(msg, true);
       }
       if (pending.kind === "verification") {
         const pv = pending as PendingVerification;
