@@ -22,6 +22,10 @@ export async function PATCH(request: Request) {
     news_scroll_speed,
     catalog_min_columns,
     catalog_max_card_width,
+    catalog_gap_px,
+    catalog_card_padding_px,
+    catalog_title_font_px,
+    catalog_text_font_px,
   } = body;
 
   const rawMinCols =
@@ -35,6 +39,15 @@ export async function PATCH(request: Request) {
     typeof catalog_max_card_width === "number"
       ? Math.max(200, Math.min(catalog_max_card_width, 600))
       : 360;
+  const safeCatalogGapPx =
+    typeof catalog_gap_px === "number" ? Math.max(8, Math.min(catalog_gap_px, 64)) : 24;
+  const safeCatalogCardPaddingPx =
+    typeof catalog_card_padding_px === "number" ? Math.max(8, Math.min(catalog_card_padding_px, 48)) : 24;
+  const safeCatalogTitleFontPx =
+    typeof catalog_title_font_px === "number" ? Math.max(12, Math.min(catalog_title_font_px, 28)) : 18;
+  const safeCatalogTextFontPx =
+    typeof catalog_text_font_px === "number" ? Math.max(10, Math.min(catalog_text_font_px, 24)) : 14;
+
   await prisma.site_settings.upsert({
     where: { id: "main" },
     create: {
@@ -48,6 +61,10 @@ export async function PATCH(request: Request) {
       news_scroll_speed: typeof news_scroll_speed === "number" ? news_scroll_speed : 3,
       catalog_min_columns: safeCatalogMinColumns,
       catalog_max_card_width: safeCatalogMaxCardWidth,
+      catalog_gap_px: safeCatalogGapPx,
+      catalog_card_padding_px: safeCatalogCardPaddingPx,
+      catalog_title_font_px: safeCatalogTitleFontPx,
+      catalog_text_font_px: safeCatalogTextFontPx,
     },
     update: {
       ...(typeof hero_title === "string" && { hero_title }),
@@ -58,6 +75,10 @@ export async function PATCH(request: Request) {
       ...(typeof news_scroll_speed === "number" && { news_scroll_speed }),
       ...((typeof catalog_min_columns === "number" || catalog_min_columns !== undefined) && { catalog_min_columns: safeCatalogMinColumns }),
       ...(typeof catalog_max_card_width === "number" && { catalog_max_card_width: safeCatalogMaxCardWidth }),
+      ...(catalog_gap_px !== undefined && { catalog_gap_px: safeCatalogGapPx }),
+      ...(catalog_card_padding_px !== undefined && { catalog_card_padding_px: safeCatalogCardPaddingPx }),
+      ...(catalog_title_font_px !== undefined && { catalog_title_font_px: safeCatalogTitleFontPx }),
+      ...(catalog_text_font_px !== undefined && { catalog_text_font_px: safeCatalogTextFontPx }),
     },
   });
   revalidatePath("/");

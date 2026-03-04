@@ -20,9 +20,13 @@ type Props = {
   items: HomeCatalogItem[];
   minColumns?: number | null;
   maxCardWidth?: number | null;
+  gapPx?: number | null;
+  cardPaddingPx?: number | null;
+  titleFontPx?: number | null;
+  textFontPx?: number | null;
 };
 
-export function HomeCatalogSection({ items, minColumns, maxCardWidth }: Props) {
+export function HomeCatalogSection({ items, minColumns, maxCardWidth, gapPx, cardPaddingPx, titleFontPx, textFontPx }: Props) {
   const [searchQuery, setSearchQuery] = useState("");
 
   return (
@@ -44,6 +48,10 @@ export function HomeCatalogSection({ items, minColumns, maxCardWidth }: Props) {
         searchQuery={searchQuery}
         minColumns={minColumns}
         maxCardWidth={maxCardWidth}
+        gapPx={gapPx}
+        cardPaddingPx={cardPaddingPx}
+        titleFontPx={titleFontPx}
+        textFontPx={textFontPx}
       />
     </section>
   );

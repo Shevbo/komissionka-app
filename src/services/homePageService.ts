@@ -11,6 +11,10 @@ const defaultSettings = {
   news_scroll_speed: 3,
   catalog_min_columns: 2,
   catalog_max_card_width: 360,
+  catalog_gap_px: 24,
+  catalog_card_padding_px: 24,
+  catalog_title_font_px: 18,
+  catalog_text_font_px: 14,
 };
 
 export async function getHomeData() {
@@ -57,6 +61,10 @@ export async function getHomeData() {
           news_scroll_speed: settings.news_scroll_speed ?? defaultSettings.news_scroll_speed,
           catalog_min_columns: settings.catalog_min_columns ?? defaultSettings.catalog_min_columns,
           catalog_max_card_width: settings.catalog_max_card_width ?? defaultSettings.catalog_max_card_width,
+          catalog_gap_px: settings.catalog_gap_px ?? defaultSettings.catalog_gap_px,
+          catalog_card_padding_px: settings.catalog_card_padding_px ?? defaultSettings.catalog_card_padding_px,
+          catalog_title_font_px: settings.catalog_title_font_px ?? defaultSettings.catalog_title_font_px,
+          catalog_text_font_px: settings.catalog_text_font_px ?? defaultSettings.catalog_text_font_px,
         }
       : defaultSettings,
     news: news ?? [],

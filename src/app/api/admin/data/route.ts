@@ -141,6 +141,10 @@ export async function GET(request: Request) {
           news_scroll_speed: siteSettings.news_scroll_speed,
           catalog_min_columns: siteSettings.catalog_min_columns,
           catalog_max_card_width: siteSettings.catalog_max_card_width,
+          catalog_gap_px: siteSettings.catalog_gap_px,
+          catalog_card_padding_px: siteSettings.catalog_card_padding_px,
+          catalog_title_font_px: siteSettings.catalog_title_font_px,
+          catalog_text_font_px: siteSettings.catalog_text_font_px,
           agent_llm_model: siteSettings.agent_llm_model,
           agent_mode: siteSettings.agent_mode,
         }

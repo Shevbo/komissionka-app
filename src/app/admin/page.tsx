@@ -78,6 +78,10 @@ type SiteSettings = {
   news_scroll_speed: number | null;
   catalog_min_columns?: number | null;
   catalog_max_card_width?: number | null;
+  catalog_gap_px?: number | null;
+  catalog_card_padding_px?: number | null;
+  catalog_title_font_px?: number | null;
+  catalog_text_font_px?: number | null;
   agent_llm_model?: string | null;
   agent_mode?: string | null;
 };
@@ -133,6 +137,10 @@ export default function AdminPage() {
     news_scroll_speed: 3,
     catalog_min_columns: 2,
     catalog_max_card_width: 360,
+    catalog_gap_px: 24,
+    catalog_card_padding_px: 24,
+    catalog_title_font_px: 18,
+    catalog_text_font_px: 14,
   });
   const [heroImageFile, setHeroImageFile] = useState<File | null>(null);
   const [heroPreviewKey, setHeroPreviewKey] = useState(0);
@@ -380,6 +388,10 @@ export default function AdminPage() {
         news_scroll_speed: data.siteSettings.news_scroll_speed ?? 3,
         catalog_min_columns: data.siteSettings.catalog_min_columns ?? 2,
         catalog_max_card_width: data.siteSettings.catalog_max_card_width ?? 360,
+        catalog_gap_px: data.siteSettings.catalog_gap_px ?? 24,
+        catalog_card_padding_px: data.siteSettings.catalog_card_padding_px ?? 24,
+        catalog_title_font_px: data.siteSettings.catalog_title_font_px ?? 18,
+        catalog_text_font_px: data.siteSettings.catalog_text_font_px ?? 14,
       });
     }
     setNews(data.news ?? []);
@@ -572,6 +584,22 @@ export default function AdminPage() {
       typeof contentForm.catalog_max_card_width === "number"
         ? Math.max(200, Math.min(contentForm.catalog_max_card_width, 600))
         : 360;
+    const catalog_gap_px =
+      typeof contentForm.catalog_gap_px === "number"
+        ? Math.max(8, Math.min(contentForm.catalog_gap_px, 64))
+        : 24;
+    const catalog_card_padding_px =
+      typeof contentForm.catalog_card_padding_px === "number"
+        ? Math.max(8, Math.min(contentForm.catalog_card_padding_px, 48))
+        : 24;
+    const catalog_title_font_px =
+      typeof contentForm.catalog_title_font_px === "number"
+        ? Math.max(12, Math.min(contentForm.catalog_title_font_px, 28))
+        : 18;
+    const catalog_text_font_px =
+      typeof contentForm.catalog_text_font_px === "number"
+        ? Math.max(10, Math.min(contentForm.catalog_text_font_px, 24))
+        : 14;
 
     try {
       let hero_image_url = contentForm.hero_image_url;
@@ -598,6 +626,10 @@ export default function AdminPage() {
           news_scroll_speed,
           catalog_min_columns,
           catalog_max_card_width,
+          catalog_gap_px,
+          catalog_card_padding_px,
+          catalog_title_font_px,
+          catalog_text_font_px,
         }),
       });
       if (!res.ok) throw new Error((await res.json()).error);
@@ -1245,6 +1277,108 @@ export default function AdminPage() {
                       }}
                       placeholder="360"
                       className="w-32"
+                    />
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <div>
+                    <Label htmlFor="catalog_gap_px">Расстояние между карточками (px)</Label>
+                    <Input
+                      id="catalog_gap_px"
+                      type="text"
+                      inputMode="numeric"
+                      value={contentForm.catalog_gap_px}
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(/\D/g, "");
+                        if (raw === "") {
+                          setContentForm((f) => ({ ...f, catalog_gap_px: 24 }));
+                          return;
+                        }
+                        const v = parseInt(raw, 10);
+                        if (!Number.isNaN(v)) setContentForm((f) => ({ ...f, catalog_gap_px: Math.max(8, Math.min(v, 64)) }));
+                      }}
+                      onBlur={(e) => {
+                        const v = parseInt(e.target.value.replace(/\D/g, ""), 10);
+                        const num = Number.isNaN(v) ? 24 : Math.max(8, Math.min(v, 64));
+                        setContentForm((f) => ({ ...f, catalog_gap_px: num }));
+                      }}
+                      placeholder="24"
+                      className="w-20"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="catalog_card_padding_px">Отступ текста в карточке от края (px)</Label>
+                    <Input
+                      id="catalog_card_padding_px"
+                      type="text"
+                      inputMode="numeric"
+                      value={contentForm.catalog_card_padding_px}
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(/\D/g, "");
+                        if (raw === "") {
+                          setContentForm((f) => ({ ...f, catalog_card_padding_px: 24 }));
+                          return;
+                        }
+                        const v = parseInt(raw, 10);
+                        if (!Number.isNaN(v)) setContentForm((f) => ({ ...f, catalog_card_padding_px: Math.max(8, Math.min(v, 48)) }));
+                      }}
+                      onBlur={(e) => {
+                        const v = parseInt(e.target.value.replace(/\D/g, ""), 10);
+                        const num = Number.isNaN(v) ? 24 : Math.max(8, Math.min(v, 48));
+                        setContentForm((f) => ({ ...f, catalog_card_padding_px: num }));
+                      }}
+                      placeholder="24"
+                      className="w-20"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="catalog_title_font_px">Размер шрифта заголовка карточки (px)</Label>
+                    <Input
+                      id="catalog_title_font_px"
+                      type="text"
+                      inputMode="numeric"
+                      value={contentForm.catalog_title_font_px}
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(/\D/g, "");
+                        if (raw === "") {
+                          setContentForm((f) => ({ ...f, catalog_title_font_px: 18 }));
+                          return;
+                        }
+                        const v = parseInt(raw, 10);
+                        if (!Number.isNaN(v)) setContentForm((f) => ({ ...f, catalog_title_font_px: Math.max(12, Math.min(v, 28)) }));
+                      }}
+                      onBlur={(e) => {
+                        const v = parseInt(e.target.value.replace(/\D/g, ""), 10);
+                        const num = Number.isNaN(v) ? 18 : Math.max(12, Math.min(v, 28));
+                        setContentForm((f) => ({ ...f, catalog_title_font_px: num }));
+                      }}
+                      placeholder="18"
+                      className="w-20"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="catalog_text_font_px">Размер шрифта текста карточки (px)</Label>
+                    <Input
+                      id="catalog_text_font_px"
+                      type="text"
+                      inputMode="numeric"
+                      value={contentForm.catalog_text_font_px}
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(/\D/g, "");
+                        if (raw === "") {
+                          setContentForm((f) => ({ ...f, catalog_text_font_px: 14 }));
+                          return;
+                        }
+                        const v = parseInt(raw, 10);
+                        if (!Number.isNaN(v)) setContentForm((f) => ({ ...f, catalog_text_font_px: Math.max(10, Math.min(v, 24)) }));
+                      }}
+                      onBlur={(e) => {
+                        const v = parseInt(e.target.value.replace(/\D/g, ""), 10);
+                        const num = Number.isNaN(v) ? 14 : Math.max(10, Math.min(v, 24));
+                        setContentForm((f) => ({ ...f, catalog_text_font_px: num }));
+                      }}
+                      placeholder="14"
+                      className="w-20"
                     />
                   </div>
                 </div>

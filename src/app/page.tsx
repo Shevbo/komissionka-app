@@ -74,6 +74,10 @@ export default async function Home() {
   const newsScrollSpeed = (settings as { news_scroll_speed?: number }).news_scroll_speed ?? 3;
   const catalogMinColumns = (settings as { catalog_min_columns?: number }).catalog_min_columns ?? 2;
   const catalogMaxCardWidth = (settings as { catalog_max_card_width?: number }).catalog_max_card_width ?? 360;
+  const catalogGapPx = (settings as { catalog_gap_px?: number }).catalog_gap_px ?? 24;
+  const catalogCardPaddingPx = (settings as { catalog_card_padding_px?: number }).catalog_card_padding_px ?? 24;
+  const catalogTitleFontPx = (settings as { catalog_title_font_px?: number }).catalog_title_font_px ?? 18;
+  const catalogTextFontPx = (settings as { catalog_text_font_px?: number }).catalog_text_font_px ?? 14;
   const heroImageUrl =
     settings.hero_image_url?.trim() ? settings.hero_image_url : null;
 
@@ -150,6 +154,10 @@ export default async function Home() {
           }))}
           minColumns={catalogMinColumns}
           maxCardWidth={catalogMaxCardWidth}
+          gapPx={catalogGapPx}
+          cardPaddingPx={catalogCardPaddingPx}
+          titleFontPx={catalogTitleFontPx}
+          textFontPx={catalogTextFontPx}
         />
 
         {/* Отзывы */}

@@ -20,11 +20,18 @@ type Props = {
   searchQuery: string;
   minColumns?: number | null;
   maxCardWidth?: number | null;
+  gapPx?: number | null;
+  cardPaddingPx?: number | null;
+  titleFontPx?: number | null;
+  textFontPx?: number | null;
 };
 
-// Значения по умолчанию для сетки каталога (если не заданы через настройки сайта/админку).
 const DEFAULT_MIN_MOBILE_COLUMNS = 2;
 const DEFAULT_MAX_CARD_WIDTH_PX = 360;
+const DEFAULT_GAP_PX = 24;
+const DEFAULT_CARD_PADDING_PX = 24;
+const DEFAULT_TITLE_FONT_PX = 18;
+const DEFAULT_TEXT_FONT_PX = 14;
 
 export function CatalogGrid({
   initialItems,
@@ -32,6 +39,10 @@ export function CatalogGrid({
   searchQuery,
   minColumns,
   maxCardWidth,
+  gapPx,
+  cardPaddingPx,
+  titleFontPx,
+  textFontPx,
 }: Props) {
   const [items, setItems] = useState<Item[]>(initialItems);
 
@@ -57,6 +68,8 @@ export function CatalogGrid({
     );
   }
 
+  const effectiveGapPx = Math.max(8, Math.min((gapPx ?? DEFAULT_GAP_PX) || DEFAULT_GAP_PX, 64));
+
   const gridTemplateColumns = useMemo(() => {
     const effectiveMinColumns = Math.min(
       Math.max((minColumns ?? DEFAULT_MIN_MOBILE_COLUMNS) || DEFAULT_MIN_MOBILE_COLUMNS, 1),
@@ -66,22 +79,31 @@ export function CatalogGrid({
       200,
       Math.min((maxCardWidth ?? DEFAULT_MAX_CARD_WIDTH_PX) || DEFAULT_MAX_CARD_WIDTH_PX, 600)
     );
-    const gapPx = 24; // gap-6
     if (effectiveMinColumns === 1) {
       return "1fr";
     }
-    // Учитываем gap: (100% - (N-1)*gap) / N — макс. ширина колонки, чтобы гарантированно влезло N колонок.
-    const gapTotal = (effectiveMinColumns - 1) * gapPx;
+    const gapTotal = (effectiveMinColumns - 1) * effectiveGapPx;
     return `repeat(${effectiveMinColumns}, minmax(min(${effectiveMaxCardWidth}px, calc((100% - ${gapTotal}px) / ${effectiveMinColumns})), 1fr))`;
-  }, [minColumns, maxCardWidth]);
+  }, [minColumns, maxCardWidth, effectiveGapPx]);
+
+  const effectiveCardPaddingPx = Math.max(8, Math.min((cardPaddingPx ?? DEFAULT_CARD_PADDING_PX) || DEFAULT_CARD_PADDING_PX, 48));
+  const effectiveTitleFontPx = Math.max(12, Math.min((titleFontPx ?? DEFAULT_TITLE_FONT_PX) || DEFAULT_TITLE_FONT_PX, 28));
+  const effectiveTextFontPx = Math.max(10, Math.min((textFontPx ?? DEFAULT_TEXT_FONT_PX) || DEFAULT_TEXT_FONT_PX, 24));
 
   return (
     <div
-      className="grid gap-6 justify-center"
-      style={{ gridTemplateColumns }}
+      className="grid justify-center"
+      style={{ gridTemplateColumns, gap: effectiveGapPx }}
     >
       {displayItems.map((item, index) => (
-        <ItemCardAnimated key={item.id} item={item} index={index} />
+        <ItemCardAnimated
+          key={item.id}
+          item={item}
+          index={index}
+          cardPaddingPx={effectiveCardPaddingPx}
+          titleFontPx={effectiveTitleFontPx}
+          textFontPx={effectiveTextFontPx}
+        />
       ))}
     </div>
   );

@@ -36,6 +36,9 @@ type Item = {
 type Props = {
   item: Item;
   index: number;
+  cardPaddingPx?: number;
+  titleFontPx?: number;
+  textFontPx?: number;
 };
 
 function formatPrice(price: number | null): string {
@@ -46,7 +49,7 @@ function formatPrice(price: number | null): string {
   }).format(price);
 }
 
-export function ItemCardAnimated({ item, index }: Props) {
+export function ItemCardAnimated({ item, index, cardPaddingPx, titleFontPx, textFontPx }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
   const { items, addItem } = useCart();
@@ -136,31 +139,61 @@ export function ItemCardAnimated({ item, index }: Props) {
               )}
             </div>
           </div>
-          <CardHeader className="pb-1">
-            <h3 className="line-clamp-2 text-lg font-semibold">{item.title}</h3>
+          <CardHeader
+            className="pb-1"
+            style={cardPaddingPx != null ? { padding: cardPaddingPx, paddingBottom: cardPaddingPx * 0.25 } : undefined}
+          >
+            <h3
+              className="line-clamp-2 font-semibold"
+              style={titleFontPx != null ? { fontSize: `${titleFontPx}px` } : undefined}
+            >
+              {item.title}
+            </h3>
           </CardHeader>
-          <CardContent className="space-y-1 pt-0">
+          <CardContent
+            className="space-y-1 pt-0"
+            style={cardPaddingPx != null ? { padding: cardPaddingPx, paddingTop: 0 } : undefined}
+          >
             {item.author_name && (
-              <p className="text-sm text-muted-foreground">Продавец: {item.author_name}</p>
+              <p
+                className="text-muted-foreground"
+                style={textFontPx != null ? { fontSize: `${textFontPx}px` } : undefined}
+              >
+                Продавец: {item.author_name}
+              </p>
             )}
             <div className="flex items-baseline gap-2">
               {item.sale_price != null ? (
                 <>
-                  <span className="text-lg text-muted-foreground line-through">
+                  <span
+                    className="text-muted-foreground line-through"
+                    style={textFontPx != null ? { fontSize: `${textFontPx}px` } : undefined}
+                  >
                     {formatPrice(item.price)}
                   </span>
-                  <span className="text-xl font-bold text-orange-600">
+                  <span
+                    className="font-bold text-orange-600"
+                    style={textFontPx != null ? { fontSize: `${textFontPx}px` } : undefined}
+                  >
                     {formatPrice(item.sale_price)}
                   </span>
                 </>
               ) : (
-                <span className="text-xl font-bold text-primary">
+                <span
+                  className="font-bold text-primary"
+                  style={textFontPx != null ? { fontSize: `${textFontPx}px` } : undefined}
+                >
                   {formatPrice(item.price)}
                 </span>
               )}
             </div>
             {item.location && (
-              <p className="text-sm text-muted-foreground">{item.location}</p>
+              <p
+                className="text-muted-foreground"
+                style={textFontPx != null ? { fontSize: `${textFontPx}px` } : undefined}
+              >
+                {item.location}
+              </p>
             )}
             <Button
               size="sm"

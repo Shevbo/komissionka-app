@@ -1,4 +1,4 @@
-# Рабочая документация на приложение «Комиссионка» вер. 1.4.0
+# Рабочая документация на приложение «Комиссионка» вер. 1.5.0
 
 ## Оглавление
 
@@ -93,7 +93,7 @@ src/
 | Данные панели | [src/app/api/admin/data/route.ts](../src/app/api/admin/data/route.ts) | Единый GET: counts, items, news, testimonials, site_settings и др. |
 | Новости | [src/app/api/admin/news/route.ts](../src/app/api/admin/news/route.ts), `[id]/route.ts` | CRUD |
 | Отзывы | [src/app/api/admin/testimonials/route.ts](../src/app/api/admin/testimonials/route.ts), `[id]/route.ts` | CRUD |
-| Настройки сайта | [src/app/api/admin/site-settings/route.ts](../src/app/api/admin/site-settings/route.ts) | hero, баннеры, параметры каталога (`catalog_min_columns`, `catalog_max_card_width`), agent_llm_model, agent_mode; редактируются во вкладке «Контент» админ‑панели |
+| Настройки сайта | [src/app/api/admin/site-settings/route.ts](../src/app/api/admin/site-settings/route.ts) | hero, баннеры, параметры каталога (колонки, ширина карточки, расстояние между карточками, отступ текста в карточке, размеры шрифтов заголовка и текста), agent_llm_model, agent_mode; редактируются во вкладке «Контент» админ‑панели |
 | Роли | [src/app/api/admin/profiles/[id]/role/route.ts](../src/app/api/admin/profiles/[id]/role/route.ts) | Обновление role (защита от снятия admin с себя) |
 | Привязка Telegram | [src/app/api/admin/telegram-bind-code/route.ts](../src/app/api/admin/telegram-bind-code/route.ts) | Генерация кода привязки |
 
@@ -160,7 +160,7 @@ src/
 | `messages` | Сообщения по товару (item_id, sender_id, content, attachments) |
 | `cart_items` | Корзина (user_id, product_id) — составной PK |
 | `user_activity` | Логи активности |
-| `site_settings` | Настройки сайта (hero‑заголовки и изображение, размеры баннеров, скорость автоскролла новостей, параметры сетки каталога `catalog_min_columns` и `catalog_max_card_width`, agent_llm_model, agent_mode) |
+| `site_settings` | Настройки сайта (hero, баннеры, автоскролл новостей; каталог: `catalog_min_columns`, `catalog_max_card_width`, `catalog_gap_px`, `catalog_card_padding_px`, `catalog_title_font_px`, `catalog_text_font_px`; agent_llm_model, agent_mode) |
 | `news` | Новости |
 | `testimonials` | Отзывы |
 | `telegram_bind_code` | Коды привязки Telegram (code, profile_id, expires_at) |

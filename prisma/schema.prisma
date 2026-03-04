@@ -106,6 +106,10 @@ model site_settings {
   news_scroll_speed   Int?     @db.SmallInt
   catalog_min_columns Int?     @db.SmallInt
   catalog_max_card_width Int?  @db.SmallInt
+  catalog_gap_px       Int?     @db.SmallInt
+  catalog_card_padding_px Int? @db.SmallInt
+  catalog_title_font_px Int?   @db.SmallInt
+  catalog_text_font_px  Int?   @db.SmallInt
   agent_llm_model     String?  @db.VarChar(255)
   agent_mode          String?  @db.VarChar(50)
 }
