@@ -24,8 +24,13 @@ export async function PATCH(request: Request) {
     catalog_max_card_width,
   } = body;
 
-  const safeCatalogMinColumns =
-    typeof catalog_min_columns === "number" ? Math.min(Math.max(catalog_min_columns, 1), 4) : 2;
+  const rawMinCols =
+    typeof catalog_min_columns === "number"
+      ? catalog_min_columns
+      : parseInt(String(catalog_min_columns ?? ""), 10);
+  const safeCatalogMinColumns = Number.isNaN(rawMinCols)
+    ? 2
+    : Math.min(Math.max(rawMinCols, 1), 4);
   const safeCatalogMaxCardWidth =
     typeof catalog_max_card_width === "number"
       ? Math.max(200, Math.min(catalog_max_card_width, 600))
@@ -51,7 +56,7 @@ export async function PATCH(request: Request) {
       ...(typeof h_banner === "number" && { h_banner }),
       ...(typeof news_banner_height === "number" && { news_banner_height }),
       ...(typeof news_scroll_speed === "number" && { news_scroll_speed }),
-      ...(typeof catalog_min_columns === "number" && { catalog_min_columns: safeCatalogMinColumns }),
+      ...((typeof catalog_min_columns === "number" || catalog_min_columns !== undefined) && { catalog_min_columns: safeCatalogMinColumns }),
       ...(typeof catalog_max_card_width === "number" && { catalog_max_card_width: safeCatalogMaxCardWidth }),
     },
   });

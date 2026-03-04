@@ -1200,32 +1200,24 @@ export default function AdminPage() {
                 </div>
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
                   <div>
-                    <Label htmlFor="catalog_min_columns">Минимальное число колонок каталога на телефоне (1–4)</Label>
-                    <Input
-                      id="catalog_min_columns"
-                      type="text"
-                      inputMode="numeric"
-                      value={contentForm.catalog_min_columns}
-                      onChange={(e) => {
-                        const raw = e.target.value.replace(/\D/g, "");
-                        if (raw === "") {
-                          setContentForm((f) => ({ ...f, catalog_min_columns: 2 }));
-                          return;
-                        }
-                        const v = parseInt(raw, 10);
-                        if (!Number.isNaN(v)) {
-                          const clamped = Math.min(Math.max(v, 1), 4);
-                          setContentForm((f) => ({ ...f, catalog_min_columns: clamped }));
-                        }
+                    <Label htmlFor="catalog_min_columns">Минимальное число колонок каталога (1–4)</Label>
+                    <Select
+                      value={String(Math.min(4, Math.max(1, contentForm.catalog_min_columns ?? 2)))}
+                      onValueChange={(v) => {
+                        const num = parseInt(v, 10);
+                        if (num >= 1 && num <= 4) setContentForm((f) => ({ ...f, catalog_min_columns: num }));
                       }}
-                      onBlur={(e) => {
-                        const v = parseInt(e.target.value.replace(/\D/g, ""), 10);
-                        const num = Number.isNaN(v) ? 2 : Math.min(Math.max(v, 1), 4);
-                        setContentForm((f) => ({ ...f, catalog_min_columns: num }));
-                      }}
-                      placeholder="2"
-                      className="w-24"
-                    />
+                    >
+                      <SelectTrigger id="catalog_min_columns" className="w-24">
+                        <SelectValue placeholder="2" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">1</SelectItem>
+                        <SelectItem value="2">2</SelectItem>
+                        <SelectItem value="3">3</SelectItem>
+                        <SelectItem value="4">4</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div>
                     <Label htmlFor="catalog_max_card_width">Максимальная ширина карточки каталога (px)</Label>

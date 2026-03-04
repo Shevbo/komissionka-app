@@ -66,8 +66,13 @@ export function CatalogGrid({
       200,
       Math.min((maxCardWidth ?? DEFAULT_MAX_CARD_WIDTH_PX) || DEFAULT_MAX_CARD_WIDTH_PX, 600)
     );
-    // Минимальная ширина колонки: не больше effectiveMaxCardWidth и не больше 1/effectiveMinColumns ширины контейнера.
-    return `repeat(auto-fit, minmax(min(${effectiveMaxCardWidth}px, ${100 / effectiveMinColumns}%), 1fr))`;
+    const gapPx = 24; // gap-6
+    if (effectiveMinColumns === 1) {
+      return "1fr";
+    }
+    // Учитываем gap: (100% - (N-1)*gap) / N — макс. ширина колонки, чтобы гарантированно влезло N колонок.
+    const gapTotal = (effectiveMinColumns - 1) * gapPx;
+    return `repeat(${effectiveMinColumns}, minmax(min(${effectiveMaxCardWidth}px, calc((100% - ${gapTotal}px) / ${effectiveMinColumns})), 1fr))`;
   }, [minColumns, maxCardWidth]);
 
   return (
