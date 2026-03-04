@@ -138,10 +138,13 @@ export async function runAgent(
       }
     }
 
+    const isConfirmationCode =
+      metadata.mode === "dev" &&
+      (/^\d{4}$/.test(trimmedPrompt) || /^(?:код\s*:?\s*|подтвержд\w*\s*:?\s*)?\d{4}\s*$/i.test(trimmedPrompt));
     const forceFresh =
       /^!/.test(trimmedPrompt) ||
       /\bforce\b/i.test(trimmedPrompt) ||
-      (metadata.mode === "dev" && /^\d{4}$/.test(trimmedPrompt)) ||
+      isConfirmationCode ||
       (metadata.mode === "dev" && /^откат\s+\d{4}\s*$/i.test(trimmedPrompt));
     const promptForLlm = forceFresh ? trimmedPrompt.replace(/^!\s*/, "").trim() : trimmedPrompt;
 

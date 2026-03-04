@@ -65,27 +65,89 @@ function loadStore(): void {
   if (!existsSync(path)) return;
   try {
     const raw = readFileSync(path, "utf8");
-    const data = JSON.parse(raw) as Record<string, Pending>;
+    const data = JSON.parse(raw) as Record<string, unknown>;
     const now = Date.now();
-    for (const [code, p] of Object.entries(data)) {
+    for (const [code, val] of Object.entries(data)) {
+      const p = pendingFromSerializable(code, val);
       if (p && typeof p.createdAt === "number" && now - ttlStart(p) <= APPROVAL_TTL_MS) {
         store.set(code, p);
       }
     }
-  } catch {
-    /* файл повреждён или пустой — работаем с пустым store */
+  } catch (e) {
+    console.error("[approval-store] loadStore failed:", e instanceof Error ? e.message : e);
   }
+}
+
+/** Сериализует pending без циклических ссылок и не-JSON значений (чтобы запись на диск не падала молча). */
+function pendingToSerializable(p: Pending): unknown {
+  const base = {
+    kind: p.kind,
+    code: p.code,
+    createdAt: p.createdAt,
+    lastShownAt: (p as Pending & { lastShownAt?: number }).lastShownAt,
+  };
+  if (p.kind === "approval") {
+    const a = p as PendingApproval;
+    return {
+      ...base,
+      actions: a.actions,
+      toolCalls: a.toolCalls,
+      filesToBackup: a.filesToBackup,
+      messages: (a.messages || []).map((m) => {
+        if (m && typeof m === "object" && "role" in m) {
+          const msg = m as Record<string, unknown>;
+          return {
+            role: msg.role,
+            content: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content ?? ""),
+            tool_calls: "tool_calls" in msg ? msg.tool_calls : undefined,
+          };
+        }
+        return null;
+      }),
+    };
+  }
+  const v = p as PendingVerification;
+  return { ...base, backupId: v.backupId, executionResult: v.executionResult };
+}
+
+/** Восстанавливает Pending из сохранённого объекта (messages — массив простых объектов). */
+function pendingFromSerializable(code: string, raw: unknown): Pending | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  if (o.kind === "approval") {
+    return {
+      kind: "approval",
+      code,
+      actions: Array.isArray(o.actions) ? o.actions : [],
+      toolCalls: Array.isArray(o.toolCalls) ? o.toolCalls : [],
+      messages: Array.isArray(o.messages) ? o.messages : [],
+      filesToBackup: Array.isArray(o.filesToBackup) ? o.filesToBackup : [],
+      createdAt: typeof o.createdAt === "number" ? o.createdAt : 0,
+      lastShownAt: typeof o.lastShownAt === "number" ? o.lastShownAt : undefined,
+    } as PendingApproval;
+  }
+  if (o.kind === "verification") {
+    return {
+      kind: "verification",
+      code,
+      backupId: typeof o.backupId === "string" ? o.backupId : "",
+      executionResult: typeof o.executionResult === "string" ? o.executionResult : "",
+      createdAt: typeof o.createdAt === "number" ? o.createdAt : 0,
+      lastShownAt: typeof o.lastShownAt === "number" ? o.lastShownAt : undefined,
+    } as PendingVerification;
+  }
+  return null;
 }
 
 function saveStore(): void {
   try {
     const dir = join(getConfig().root, ".agent");
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-    const obj: Record<string, Pending> = {};
-    for (const [code, p] of store.entries()) obj[code] = p;
+    const obj: Record<string, unknown> = {};
+    for (const [code, p] of store.entries()) obj[code] = pendingToSerializable(p);
     writeFileSync(getPendingFilePath(), JSON.stringify(obj, null, 0), "utf8");
-  } catch {
-    /* не удалось записать — храним только в памяти */
+  } catch (e) {
+    console.error("[approval-store] saveStore failed:", e instanceof Error ? e.message : e);
   }
 }
 

@@ -337,8 +337,12 @@ export async function runAgentCore(
       }
       return makeReturn("Код не для отката (ожидается код верификации).");
     }
-    if (/^\d{4}$/.test(trimmedPrompt)) {
-      const cr = consumePending(trimmedPrompt);
+    const codeMatch =
+      /^\d{4}$/.test(trimmedPrompt)
+        ? trimmedPrompt
+        : /(?:код\s*:?\s*|подтвержд\w*\s*:?\s*)?(\d{4})\s*$/i.exec(trimmedPrompt)?.[1];
+    if (codeMatch) {
+      const cr = consumePending(codeMatch);
       if (!cr) return makeReturn("Неверный или несуществующий код подтверждения.");
       const { pending, expired } = cr;
       if (expired && pending.kind === "verification") {
