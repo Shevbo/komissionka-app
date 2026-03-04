@@ -42,6 +42,8 @@ yarn-error.log*
 /.agent-tmp
 # agent backup for dev mode approval flow
 /.agent-backup
+# agent pending confirmation codes (persisted across restarts)
+/.agent/pending-codes.json
 
 # vercel
 .vercel

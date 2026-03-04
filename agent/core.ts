@@ -344,7 +344,7 @@ export async function runAgentCore(
           const restoreCmd = `npx tsx scripts/agent-backup.ts restore ${pv.backupId}`;
           await executeTool("run_command", { command: restoreCmd });
         }
-        return makeReturn("Время подтверждения истекло (15 мин). Выполнен автоматический откат из резервной копии.");
+        return makeReturn("Время подтверждения истекло (30 мин). Выполнен автоматический откат из резервной копии.");
       }
       if (expired && pending.kind === "approval") {
         return makeReturn("Время подтверждения истекло. Повторите запрос для нового кода.");
@@ -399,7 +399,7 @@ export async function runAgentCore(
           verifyCode +
           "\n\nЧтобы откатить — отправьте: откат " +
           verifyCode +
-          "\n\nВремя на ответ: 15 минут. По истечении времени при следующем запросе код будет считаться истёкшим.";
+          "\n\nВремя на ответ: 30 минут. По истечении времени при следующем запросе код будет считаться истёкшим.";
         return makeReturn(msg, true);
       }
       if (pending.kind === "verification") {

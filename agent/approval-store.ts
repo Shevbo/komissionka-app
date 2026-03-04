@@ -1,7 +1,13 @@
 /**
  * Хранилище ожидающих подтверждений в режиме «Разработка».
- * Защита от случайного выполнения: 4-значный код, таймаут 15 минут.
+ * Защита от случайного выполнения: 4-значный код, таймаут 30 минут.
+ * Состояние сохраняется в файл .agent/pending-codes.json, чтобы коды оставались
+ * действительными после перезапуска агента (деплой, pm2 restart).
  */
+
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
+import { getConfig } from "./config.js";
 
 export type PendingKind = "approval" | "verification";
 
@@ -33,15 +39,59 @@ export type Pending = PendingApproval | PendingVerification;
 
 const store = new Map<string, Pending>();
 
-const APPROVAL_TTL_MS = 15 * 60 * 1000; // 15 минут
+/** 30 минут — чтобы код оставался действительным при перезапуске агента (деплой) или долгом чтении плана. */
+const APPROVAL_TTL_MS = 30 * 60 * 1000;
+
+let loadedFromDisk = false;
+
+function getPendingFilePath(): string {
+  return join(getConfig().root, ".agent", "pending-codes.json");
+}
+
+function loadStore(): void {
+  loadedFromDisk = true;
+  const path = getPendingFilePath();
+  if (!existsSync(path)) return;
+  try {
+    const raw = readFileSync(path, "utf8");
+    const data = JSON.parse(raw) as Record<string, Pending>;
+    const now = Date.now();
+    for (const [code, p] of Object.entries(data)) {
+      if (p && typeof p.createdAt === "number" && now - p.createdAt <= APPROVAL_TTL_MS) {
+        store.set(code, p);
+      }
+    }
+  } catch {
+    /* файл повреждён или пустой — работаем с пустым store */
+  }
+}
+
+function saveStore(): void {
+  try {
+    const dir = join(getConfig().root, ".agent");
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    const obj: Record<string, Pending> = {};
+    for (const [code, p] of store.entries()) obj[code] = p;
+    writeFileSync(getPendingFilePath(), JSON.stringify(obj, null, 0), "utf8");
+  } catch {
+    /* не удалось записать — храним только в памяти */
+  }
+}
+
+function ensureLoaded(): void {
+  if (!loadedFromDisk) loadStore();
+}
 
 function cleanupExpired(): void {
   const now = Date.now();
+  let changed = false;
   for (const [code, p] of store.entries()) {
     if (now - p.createdAt > APPROVAL_TTL_MS) {
       store.delete(code);
+      changed = true;
     }
   }
+  if (changed) saveStore();
 }
 
 /** Генерирует 4-значный код (1000–9999). */
@@ -49,10 +99,12 @@ export function generateCode(): string {
   return String(1000 + Math.floor(Math.random() * 9000));
 }
 
-/** Сохраняет ожидание подтверждения. */
+/** Сохраняет ожидание подтверждения (в память и в файл). */
 export function setPending(code: string, pending: Pending): void {
+  ensureLoaded();
   cleanupExpired();
   store.set(code, pending);
+  saveStore();
 }
 
 export interface ConsumeResult {
@@ -62,21 +114,25 @@ export interface ConsumeResult {
 
 /** Получает и удаляет pending по коду. Возвращает undefined, если не найден. При истечении — всё равно возвращает данные (expired: true) для отката. */
 export function consumePending(code: string): ConsumeResult | undefined {
+  ensureLoaded();
   cleanupExpired();
   const p = store.get(code);
   if (!p) return undefined;
   const expired = Date.now() - p.createdAt > APPROVAL_TTL_MS;
   store.delete(code);
+  saveStore();
   return { pending: p, expired };
 }
 
 /** Проверяет, есть ли pending с данным кодом (без удаления). */
 export function hasPending(code: string): boolean {
+  ensureLoaded();
   cleanupExpired();
   const p = store.get(code);
   if (!p) return false;
   if (Date.now() - p.createdAt > APPROVAL_TTL_MS) {
     store.delete(code);
+    saveStore();
     return false;
   }
   return true;
