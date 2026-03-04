@@ -12,7 +12,7 @@ module.exports = {
       instances: 1,
       exec_mode: "fork",
       max_memory_restart: "700M",
-      env: { NODE_OPTIONS: "--max-old-space-size=512" },
+      env: { NODE_OPTIONS: "--max-old-space-size=512", TZ: "Europe/Moscow" },
     },
     {
       name: "agent",
@@ -20,7 +20,7 @@ module.exports = {
       args: "tsx agent/serve.ts",
       cwd: __dirname,
       max_memory_restart: "400M",
-      env: { NODE_OPTIONS: "--max-old-space-size=384" },
+      env: { NODE_OPTIONS: "--max-old-space-size=384", TZ: "Europe/Moscow" },
     },
     {
       name: "bot",
@@ -28,7 +28,7 @@ module.exports = {
       args: "tsx telegram-bot/bot.ts",
       cwd: __dirname,
       max_memory_restart: "200M",
-      env: { NODE_OPTIONS: "--max-old-space-size=192" },
+      env: { NODE_OPTIONS: "--max-old-space-size=192", TZ: "Europe/Moscow" },
     },
   ],
 };

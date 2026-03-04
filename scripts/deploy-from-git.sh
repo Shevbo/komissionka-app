@@ -29,7 +29,8 @@ npx prisma migrate deploy
 
 echo "[4/4] Building app and restarting PM2..."
 npm run build
-pm2 restart komissionka agent bot
+export TZ=Europe/Moscow
+pm2 restart komissionka agent bot --update-env
 
 echo "[deploy-from-git] Done. Commit: $CURRENT_COMMIT"
 

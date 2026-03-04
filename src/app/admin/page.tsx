@@ -1295,7 +1295,7 @@ export default function AdminPage() {
                           return;
                         }
                         const v = parseInt(raw, 10);
-                        if (!Number.isNaN(v)) setContentForm((f) => ({ ...f, catalog_gap_px: Math.max(8, Math.min(v, 64)) }));
+                        if (!Number.isNaN(v)) setContentForm((f) => ({ ...f, catalog_gap_px: v }));
                       }}
                       onBlur={(e) => {
                         const v = parseInt(e.target.value.replace(/\D/g, ""), 10);
@@ -1320,7 +1320,7 @@ export default function AdminPage() {
                           return;
                         }
                         const v = parseInt(raw, 10);
-                        if (!Number.isNaN(v)) setContentForm((f) => ({ ...f, catalog_card_padding_px: Math.max(8, Math.min(v, 48)) }));
+                        if (!Number.isNaN(v)) setContentForm((f) => ({ ...f, catalog_card_padding_px: v }));
                       }}
                       onBlur={(e) => {
                         const v = parseInt(e.target.value.replace(/\D/g, ""), 10);
@@ -1345,7 +1345,7 @@ export default function AdminPage() {
                           return;
                         }
                         const v = parseInt(raw, 10);
-                        if (!Number.isNaN(v)) setContentForm((f) => ({ ...f, catalog_title_font_px: Math.max(12, Math.min(v, 28)) }));
+                        if (!Number.isNaN(v)) setContentForm((f) => ({ ...f, catalog_title_font_px: v }));
                       }}
                       onBlur={(e) => {
                         const v = parseInt(e.target.value.replace(/\D/g, ""), 10);
@@ -1370,7 +1370,7 @@ export default function AdminPage() {
                           return;
                         }
                         const v = parseInt(raw, 10);
-                        if (!Number.isNaN(v)) setContentForm((f) => ({ ...f, catalog_text_font_px: Math.max(10, Math.min(v, 24)) }));
+                        if (!Number.isNaN(v)) setContentForm((f) => ({ ...f, catalog_text_font_px: v }));
                       }}
                       onBlur={(e) => {
                         const v = parseInt(e.target.value.replace(/\D/g, ""), 10);

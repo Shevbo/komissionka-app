@@ -2,11 +2,11 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "komiss/lib/auth";
 import { prisma } from "komiss/lib/prisma";
-import { mkdir } from "fs/promises";
+import { mkdir, writeFile } from "fs/promises";
 import path from "path";
-import { createWriteStream } from "fs";
-import { pipeline } from "stream/promises";
-import { Readable } from "stream";
+import sharp from "sharp";
+
+const HERO_MAX_WIDTH_PX = 1920;
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
@@ -26,8 +26,29 @@ export async function POST(request: Request) {
   const dir = path.join(process.cwd(), "public", "uploads", "hero");
   await mkdir(dir, { recursive: true });
   const filepath = path.join(dir, filename);
-  const nodeStream = Readable.fromWeb(file.stream() as import("stream/web").ReadableStream);
-  await pipeline(nodeStream, createWriteStream(filepath));
-  const url = `/uploads/hero/${filename}`;
-  return NextResponse.json({ url });
+
+  const buf = Buffer.from(await file.arrayBuffer());
+  const isImage = (file.type || "").startsWith("image/");
+
+  if (isImage) {
+    try {
+      const meta = await sharp(buf).metadata();
+      const w = meta.width ?? 0;
+      if (w > HERO_MAX_WIDTH_PX) {
+        const outBuf = await sharp(buf)
+          .resize(HERO_MAX_WIDTH_PX, undefined, { withoutEnlargement: true })
+          .jpeg({ quality: 85 })
+          .toBuffer();
+        const jpgFilename = filename.replace(/\.[a-z0-9]+$/i, ".jpg");
+        const jpgPath = path.join(dir, jpgFilename);
+        await writeFile(jpgPath, outBuf);
+        return NextResponse.json({ url: `/uploads/hero/${jpgFilename}` });
+      }
+    } catch {
+      // fallback: write original
+    }
+  }
+
+  await writeFile(filepath, buf);
+  return NextResponse.json({ url: `/uploads/hero/${filename}` });
 }

@@ -1,15 +1,12 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "komiss/lib/auth";
-import { mkdir } from "fs/promises";
+import { mkdir, writeFile } from "fs/promises";
 import path from "path";
-import { createWriteStream } from "fs";
-import { pipeline } from "stream/promises";
-import { Readable } from "stream";
+import sharp from "sharp";
 
-// TODO: Вынести загрузку в S3-совместимое хранилище для Production-окружения (Vercel/Docker без volume).
-// Текущий код использует process.cwd()/public/uploads — на Serverless (Vercel, AWS Lambda) и ReadOnly ФС он упадёт.
-// При заданной переменной S3_BUCKET следует переключиться на облачное хранилище (S3, MinIO, R2 и т.п.).
+const ITEM_FHD_MAX_WIDTH = 1920;
+const ITEM_FHD_MAX_HEIGHT = 1080;
 
 export async function POST(request: Request) {
   if (process.env.S3_BUCKET) {
@@ -26,7 +23,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const formData = await request.formData();
-  const files = formData.getAll("files") as File[]; // Изменено на getAll
+  const files = formData.getAll("files") as File[];
 
   if (!files || files.length === 0) {
     return NextResponse.json({ error: "No files uploaded" }, { status: 400 });
@@ -41,8 +38,31 @@ export async function POST(request: Request) {
     const ext = (file.name.split(".").pop() ?? "jpg").replace(/[^a-z0-9]/gi, "").toLowerCase() || "jpg";
     const filename = `${Date.now()}-${crypto.randomUUID()}.${ext}`;
     const filepath = path.join(dir, filename);
-    const nodeStream = Readable.fromWeb(file.stream() as import("stream/web").ReadableStream);
-    await pipeline(nodeStream, createWriteStream(filepath));
+    const buf = Buffer.from(await file.arrayBuffer());
+    const isImage = (file.type || "").startsWith("image/");
+
+    if (isImage) {
+      try {
+        const meta = await sharp(buf).metadata();
+        const w = meta.width ?? 0;
+        const h = meta.height ?? 0;
+        const needsResize = w > ITEM_FHD_MAX_WIDTH || h > ITEM_FHD_MAX_HEIGHT;
+        if (needsResize) {
+          const out = await sharp(buf)
+            .resize(ITEM_FHD_MAX_WIDTH, ITEM_FHD_MAX_HEIGHT, { fit: "inside", withoutEnlargement: true })
+            .jpeg({ quality: 88 })
+            .toBuffer();
+          const outPath = path.join(dir, filename.replace(/\.[a-z0-9]+$/i, ".jpg"));
+          await writeFile(outPath, out);
+          urls.push(`/uploads/items/${filename.replace(/\.[a-z0-9]+$/i, ".jpg")}`);
+          continue;
+        }
+      } catch {
+        // fallback: write original
+      }
+    }
+
+    await writeFile(filepath, buf);
     urls.push(`/uploads/items/${filename}`);
   }
 
@@ -50,5 +70,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No valid files uploaded" }, { status: 400 });
   }
 
-  return NextResponse.json({ urls }); // Возвращаем массив URL-адресов
+  return NextResponse.json({ urls });
 }
