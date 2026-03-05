@@ -109,12 +109,13 @@ function appendAgentDiagnoseToChat(
   fetch("/api/admin/agent/diagnose", { credentials: "include" })
     .then((r) => r.json())
     .then((data: { ok?: boolean; output?: string }) => {
-      if (data.ok && typeof data.output === "string" && data.output.trim()) {
+      const output = typeof data.output === "string" ? data.output.trim() : "";
+      if (data.ok && output) {
         setAiMessagesForCurrentSession((prev) => [
           ...prev,
           {
             role: "assistant",
-            content: "Результаты выполнения на сервере:\n\n" + data.output.trim(),
+            content: "Результаты выполнения на сервере:\n\n" + output,
             timestamp: Date.now(),
           },
         ]);
