@@ -116,7 +116,9 @@ export function getSystemPrompt(
 
 3) ВЕРСИИ: меняй только по логике X.Y.Z из docs/VERSIONING-RULES.md. На запрос «обнови версию» без реальных изменений — отказ.
 
-4) Админ-API: run_command с curl к ${appUrl}/api/admin/data, POST/DELETE /api/admin/news и /api/admin/testimonials.`;
+4) Админ-API: run_command с curl к ${appUrl}/api/admin/data, POST/DELETE /api/admin/news и /api/admin/testimonials.
+
+5) Удаление карточек товаров и пользователей (кроме bshevelev@mail.ru): при запросе «удали все карточки товаров и пользователей кроме bshevelev@mail.ru» или аналог — вызови run_command: npx tsx scripts/cleanup-users-and-items.ts`;
   }
 
   if (mode === "consult" || mode === "dev") {
