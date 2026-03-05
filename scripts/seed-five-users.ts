@@ -6,6 +6,7 @@
 import "dotenv/config";
 import { prisma } from "../src/lib/prisma";
 import bcrypt from "bcryptjs";
+import { generateItemImagesBatch } from "../src/lib/item-image-generator";
 
 async function main() {
   console.log("Start seeding 5 users...");
@@ -70,14 +71,21 @@ async function main() {
       });
 
       for (const itemName of u.items) {
-        const baseSeed = encodeURIComponent(itemName);
-        const imageUrls = [
-          // Фотореалистичное изображение (случайное, но стабильное по seed)
-          `https://picsum.photos/seed/${baseSeed}-photo/800/600`,
-          // Дополнительные схематичные / вариативные изображения того же товара
-          `https://picsum.photos/seed/${baseSeed}-schematic-1/800/600`,
-          `https://picsum.photos/seed/${baseSeed}-schematic-2/800/600`,
-        ];
+        let imageUrls: string[];
+        try {
+          imageUrls = await generateItemImagesBatch({
+            title: itemName,
+            description: `Демонстрационный товар пользователя ${u.name}.`,
+            count: 3,
+          });
+        } catch (e) {
+          console.error(
+            `Не удалось сгенерировать иллюстрации для демо-товара "${itemName}", используем плейсхолдеры:`,
+            e
+          );
+          const placeholder = "/images/placeholder.svg";
+          imageUrls = [placeholder, placeholder, placeholder];
+        }
 
         await tx.items.create({
           data: {

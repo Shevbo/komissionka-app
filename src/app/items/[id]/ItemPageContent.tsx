@@ -47,6 +47,7 @@ export function ItemPageContent({ item, itemId }: ItemPageContentProps) {
   const [mainImageError, setMainImageError] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const isAuthor = user?.id === item.seller_id;
@@ -137,6 +138,39 @@ export function ItemPageContent({ item, itemId }: ItemPageContentProps) {
       setError(err instanceof Error ? err.message : "Неизвестная ошибка");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGenerateImage = async () => {
+    if (!canEdit || !isEditing) return;
+    setIsGenerating(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/items/${itemId}/generate-image`, {
+        method: "POST",
+      });
+
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error ?? "Не удалось сгенерировать иллюстрацию");
+      }
+
+      const data = await res.json();
+      const urls = Array.isArray(data.image_urls) ? data.image_urls as string[] : [];
+
+      if (urls.length > 0) {
+        setCurrentImageUrls(urls);
+        setMainImage(urls[urls.length - 1]);
+      }
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Произошла ошибка при генерации иллюстрации"
+      );
+    } finally {
+      setIsGenerating(false);
     }
   };
 
@@ -308,15 +342,27 @@ export function ItemPageContent({ item, itemId }: ItemPageContentProps) {
               )}
 
               {isEditing && (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <h3 className="font-semibold">Добавить новые фото</h3>
-                  <Input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={handleNewImageChange}
-                    className="cursor-pointer"
-                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleGenerateImage}
+                    disabled={loading || isGenerating}
+                    className="w-full sm:w-auto"
+                  >
+                    {isGenerating ? "Генерация иллюстрации..." : "Сгенерировать новую иллюстрацию"}
+                  </Button>
+                  <div className="space-y-2">
+                    <label className="text-sm text-muted-foreground">или загрузить с устройства</label>
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleNewImageChange}
+                      className="cursor-pointer"
+                    />
+                  </div>
                 </div>
               )}
             </div>

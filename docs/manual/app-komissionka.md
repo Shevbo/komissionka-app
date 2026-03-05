@@ -1,4 +1,4 @@
-# Рабочая документация на приложение «Комиссионка» вер. 1.5.0
+# Рабочая документация на приложение «Комиссионка» вер. 1.6.0
 
 ## Оглавление
 
@@ -70,7 +70,7 @@ src/
 | API товаров | [src/app/api/items/route.ts](../src/app/api/items/route.ts), [src/app/api/items/[id]/route.ts](../src/app/api/items/[id]/route.ts) | CRUD, batch |
 | Картинки | [src/lib/image-url.ts](../src/lib/image-url.ts) | `resolveImageUrl()` — `/uploads/` → полный URL (APP_BASE_URL) |
 | Компоненты | [src/components/catalog-grid.tsx](../src/components/catalog-grid.tsx), [src/components/item-card-animated.tsx](../src/components/item-card-animated.tsx), [src/components/HomeCatalogSection.tsx](../src/components/HomeCatalogSection.tsx) | Сетка, карточки. В `catalog-grid.tsx` используются параметры `catalog_min_columns` (минимальное число колонок на телефонах, 1–4) и `catalog_max_card_width` (максимальная ширина карточки в пикселях), которые задаются через таблицу `site_settings` и редактируются администратором во вкладке «Контент» админ‑панели. Это позволяет управлять плотностью сетки и не допускать чрезмерно крупных карточек на широких экранах без изменения кода. |
-| Страница товара | [src/app/items/[id]/page.tsx](../src/app/items/[id]/page.tsx), [src/app/items/[id]/ItemPageContent.tsx](../src/app/items/[id]/ItemPageContent.tsx) | Детали, чат |
+| Страница товара | [src/app/items/[id]/page.tsx](../src/app/items/[id]/page.tsx), [src/app/items/[id]/ItemPageContent.tsx](../src/app/items/[id]/ItemPageContent.tsx) | Детали, чат, редактирование карточки продавцом (загрузка собственных фото и кнопка генерации новых иллюстраций через Gemini Flash) |
 
 ### 3.3 Корзина
 

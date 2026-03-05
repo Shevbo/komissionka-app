@@ -9,6 +9,7 @@
  */
 import "dotenv/config";
 import { prisma } from "../src/lib/prisma";
+import { generateItemImagesBatch } from "../src/lib/item-image-generator";
 
 const ADMIN_EMAIL = "bshevelev@mail.ru";
 
@@ -51,11 +52,6 @@ const ITEMS = [
   { title: "Книжная полка БИЛЛИ", price: 3200, location: "Воронеж", desc: "Книжная полка IKEA БИЛЛИ, белая. Высота 202 см, пять полок. Собрана аккуратно, все крепления на месте. Подходит для книг и декора. Разбирается легко. Самовывоз, помогу вынести. Состояние как новая." },
 ];
 
-/** Статический плейсхолдер из public/ — без API и внешних сервисов. */
-function img(_n: number): string {
-  return "/images/placeholder.svg";
-}
-
 async function main() {
   const adminEmail = ADMIN_EMAIL.trim().toLowerCase();
   const admin = await prisma.users.findFirst({
@@ -92,11 +88,24 @@ async function main() {
   }
   console.log("   Создано 10 отзывов");
 
-  console.log("\n4. Создание 10 товаров...");
-  let imgSeed = 100;
+  console.log("\n4. Создание 10 товаров с иллюстрациями от Gemini...");
   for (const it of ITEMS) {
-    const count = 4 + Math.floor(Math.random() * 5); // 4–8 картинок
-    const urls = Array.from({ length: count }, () => img(++imgSeed));
+    let urls: string[];
+    try {
+      urls = await generateItemImagesBatch({
+        title: it.title,
+        description: it.desc,
+        count: 3,
+      });
+    } catch (e) {
+      console.error(
+        `   Не удалось сгенерировать иллюстрации для товара "${it.title}", используем плейсхолдеры:`,
+        e
+      );
+      const placeholder = "/images/placeholder.svg";
+      urls = [placeholder, placeholder, placeholder];
+    }
+
     await prisma.items.create({
       data: {
         seller_id: sellerId,
@@ -110,7 +119,7 @@ async function main() {
       },
     });
   }
-  console.log("   Создано 10 товаров с 4–8 фото");
+  console.log("   Создано 10 товаров с 3 семантическими фото каждый");
 
   console.log("\n✓ Готово. Админ: bshevelev@mail.ru (пароль: 123456)");
 }
