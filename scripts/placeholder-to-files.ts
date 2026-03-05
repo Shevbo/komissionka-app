@@ -13,11 +13,8 @@ const UPLOADS_ITEMS = path.join(process.cwd(), "public", "uploads", "items");
 function isPlaceholderUrl(url: string): boolean {
   if (!url?.trim()) return false;
   const s = url.trim().toLowerCase();
-  return (
-    s.includes("placeholder") ||
-    s.includes("placehold.co") ||
-    s.includes("picsum.photos")
-  );
+  // Обрабатываем только явные плейсхолдеры, а не реальные фото (picsum/photos и т.п.).
+  return s.includes("/api/placeholder") || s.includes("placeholder.svg") || s.includes("placehold.co");
 }
 
 function svgPlaceholder(n: number): string {

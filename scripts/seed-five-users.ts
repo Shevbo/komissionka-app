@@ -65,15 +65,18 @@ async function main() {
           full_name: u.name,
           role: "user",
           created_at: new Date(),
-          avatar_url: `https://placehold.co/150?text=${encodeURIComponent(u.name[0] ?? "?")}`,
+          avatar_url: `https://picsum.photos/seed/${encodeURIComponent(u.email)}/150/150`,
         },
       });
 
       for (const itemName of u.items) {
+        const baseSeed = encodeURIComponent(itemName);
         const imageUrls = [
-          `https://placehold.co/600x400?text=${encodeURIComponent(itemName + " 1")}`,
-          `https://placehold.co/600x400?text=${encodeURIComponent(itemName + " 2")}`,
-          `https://placehold.co/600x400?text=${encodeURIComponent(itemName + " 3")}`,
+          // Фотореалистичное изображение (случайное, но стабильное по seed)
+          `https://picsum.photos/seed/${baseSeed}-photo/800/600`,
+          // Дополнительные схематичные / вариативные изображения того же товара
+          `https://picsum.photos/seed/${baseSeed}-schematic-1/800/600`,
+          `https://picsum.photos/seed/${baseSeed}-schematic-2/800/600`,
         ];
 
         await tx.items.create({
