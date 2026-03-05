@@ -121,6 +121,13 @@ export async function POST(req: Request) {
     body.mode === "chat" || body.mode === "consult" || body.mode === "dev" ? body.mode : undefined;
 
   const stream = body.stream === true;
+  const isCodePrompt =
+    mode === "dev" &&
+    (/^\d{4}$/.test(prompt) || /^откат\s+\d{4}\s*$/i.test(prompt));
+  // Для коротких промптов‑кодов (подтверждение/откат) отключаем стриминг:
+  // хотим обычный JSON‑ответ без SSE, чтобы избежать редких сбоев чтения EventSource
+  // и упростить диагностику ошибок.
+  const useStream = stream && !isCodePrompt;
 
   // Выбранная администратором модель (из БД)
   let modelOverride: { model: string; baseUrl?: string; apiKey?: string } | undefined;
@@ -146,7 +153,7 @@ export async function POST(req: Request) {
     "Content-Type": "application/json",
     Connection: "close",
   };
-  if (stream) {
+  if (useStream) {
     headers.Accept = "text/event-stream";
   }
   if (AGENT_API_KEY) {
@@ -154,7 +161,7 @@ export async function POST(req: Request) {
   }
 
   const modelDisplayName = selectedModel ? getModelById(selectedModel)?.name : undefined;
-  const basePath = `/run${stream ? "?stream=1" : ""}`;
+  const basePath = `/run${useStream ? "?stream=1" : ""}`;
   const userAccount = session?.user?.email ?? session?.user?.id ?? null;
   const agentBody: Record<string, unknown> = {
     prompt,
@@ -194,7 +201,7 @@ export async function POST(req: Request) {
   try {
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      if (stream) {
+      if (useStream) {
         const streamResponse = await new Promise<Response>((resolve, reject) => {
           const req = http.request(
             {
