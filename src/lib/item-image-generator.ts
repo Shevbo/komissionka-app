@@ -27,29 +27,38 @@ type GenerateItemImageParams = {
   variantIndex?: number;
 };
 
-export async function generateItemImageFile(params: GenerateItemImageParams): Promise<{
-  url: string;
-  filename: string;
-}> {
-  const { itemId, title, description, variantIndex } = params;
+const MAX_IMAGE_RETRIES = 3;
 
+/** Варианты промпта для повторных попыток, если модель вернула только текст. */
+function buildPromptVariants(
+  title: string,
+  description: string | null | undefined,
+  variantIndex: number | undefined
+): string[] {
+  const base = `Товар: ${title}`;
+  const desc = description?.trim() ? ` Описание: ${description.trim()}` : "";
+  const variant =
+    typeof variantIndex === "number"
+      ? ` Вариант №${variantIndex}, немного другой ракурс или фон.`
+      : "";
+
+  return [
+    `Сгенерируй одно фотореалистичное изображение товара для каталога. Без текста, логотипов и водяных знаков, нейтральный фон.\n${base}${desc}${variant}`,
+    `Product photo, single object on white background, no text, no logos. Subject: ${title}.${desc ? ` ${description}` : ""}`,
+    `One realistic product photo: ${title}. Clean background, no text.`,
+  ];
+}
+
+async function requestImageFromGemini(prompt: string): Promise<{ mimeType: string; data: string } | null> {
   const apiKey = process.env.AGENT_LLM_API_KEY;
-  if (!apiKey) {
-    throw new Error("AGENT_LLM_API_KEY is not configured");
-  }
+  if (!apiKey) throw new Error("AGENT_LLM_API_KEY is not configured");
 
-  const promptParts: string[] = [];
-  promptParts.push(
-    "Сгенерируй фотореалистичное изображение товара для онлайн-комиссионки. Без текста, без логотипов и без водяных знаков, на нейтральном фоне."
-  );
-  promptParts.push(`Товар: ${title}`);
-  if (description && description.trim()) {
-    promptParts.push(`Описание: ${description}`);
+  const proxyUrl = getProxyUrl();
+  if (!proxyUrl) {
+    throw new Error(
+      "Для запросов к Gemini задайте прокси в .env: AGENT_PROXY или AGENT_HTTPS_PROXY или AGENT_HTTP_PROXY"
+    );
   }
-  if (typeof variantIndex === "number") {
-    promptParts.push(`Это вариант №${variantIndex}. Сделай его немного отличающимся от предыдущих.`);
-  }
-  const prompt = promptParts.join("\n");
 
   const url = `${GEMINI_BASE}/models/${DEFAULT_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
   const body = {
@@ -65,13 +74,6 @@ export async function generateItemImageFile(params: GenerateItemImageParams): Pr
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   };
-
-  const proxyUrl = getProxyUrl();
-  if (!proxyUrl) {
-    throw new Error(
-      "Для запросов к Gemini задайте прокси в .env: AGENT_PROXY или AGENT_HTTPS_PROXY или AGENT_HTTP_PROXY (например AGENT_PROXY=https://proxy.example.com:8080)"
-    );
-  }
   fetchOptions.dispatcher = new ProxyAgent({
     uri: proxyUrl,
     proxyTls: { timeout: PROXY_CONNECT_TIMEOUT_MS },
@@ -103,12 +105,38 @@ export async function generateItemImageFile(params: GenerateItemImageParams): Pr
   };
   const parts = data.candidates?.[0]?.content?.parts ?? [];
   const imagePart = parts.find((p) => p?.inlineData?.data);
-  if (!imagePart?.inlineData?.data) {
-    throw new Error("Gemini не вернул изображение");
+  if (!imagePart?.inlineData?.data) return null;
+  return {
+    mimeType: imagePart.inlineData.mimeType || "image/png",
+    data: imagePart.inlineData.data,
+  };
+}
+
+export async function generateItemImageFile(params: GenerateItemImageParams): Promise<{
+  url: string;
+  filename: string;
+}> {
+  const { itemId, title, description, variantIndex } = params;
+  const prompts = buildPromptVariants(title, description, variantIndex);
+
+  let image: { mimeType: string; data: string } | null = null;
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < Math.min(MAX_IMAGE_RETRIES, prompts.length); attempt++) {
+    try {
+      image = await requestImageFromGemini(prompts[attempt]!);
+      if (image) break;
+    } catch (e) {
+      lastError = e instanceof Error ? e : new Error(String(e));
+    }
   }
 
-  const mimeType: string = imagePart.inlineData.mimeType || "image/png";
-  const base64: string = imagePart.inlineData.data;
+  if (!image?.data) {
+    throw lastError ?? new Error("Gemini не вернул изображение после нескольких попыток с разными промптами");
+  }
+
+  const mimeType: string = image.mimeType;
+  const base64: string = image.data;
 
   const ext =
     mimeType.includes("png") ? "png" :
