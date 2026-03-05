@@ -131,6 +131,12 @@ export async function POST(
         { status: 503 }
       );
     }
+    if ((err?.status === 404 || msg.includes("is not found")) && msg.includes("generateContent")) {
+      return NextResponse.json(
+        { error: "Модель для генерации изображений недоступна. Задайте в .env ITEM_IMAGE_MODEL=gemini-2.5-flash-image (или другую поддерживаемую модель) и перезапустите приложение." },
+        { status: 503 }
+      );
+    }
 
     return NextResponse.json(
       { error: "Не удалось сгенерировать иллюстрацию для товара" },

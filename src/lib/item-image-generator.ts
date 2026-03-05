@@ -8,7 +8,7 @@ import { randomUUID } from "node:crypto";
 import { ProxyAgent, fetch as undiciFetch } from "undici";
 
 const UPLOADS_ITEMS_DIR = path.join(process.cwd(), "public", "uploads", "items");
-const DEFAULT_MODEL = process.env.ITEM_IMAGE_MODEL || "gemini-2.0-flash-exp";
+const DEFAULT_MODEL = process.env.ITEM_IMAGE_MODEL || "gemini-2.5-flash-image";
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
 const PROXY_CONNECT_TIMEOUT_MS = Number(process.env.AGENT_PROXY_CONNECT_TIMEOUT_MS) || 30_000;
 
