@@ -102,9 +102,9 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({
-    itemsCount,
-    messagesCount,
-    items: items.map((i) => ({
+  itemsCount,
+  messagesCount,
+  items: items.map((i: any) => ({
       ...i,
       price: i.price == null ? null : Number(i.price),
       created_at: i.created_at?.toISOString() ?? null,
