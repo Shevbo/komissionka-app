@@ -9,7 +9,7 @@ import { useAuth } from "komiss/components/auth-provider";
 import { Button } from "komiss/components/ui/button";
 import { Input } from "komiss/components/ui/input";
 import { Textarea } from "komiss/components/ui/textarea";
-import { ChevronLeft, ChevronRight, X, XCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, Trash2, X, XCircle } from "lucide-react";
 import { PLACEHOLDER_DATA_URI } from "komiss/lib/placeholder";
 
 export type ItemPageContentItem = {
@@ -48,6 +48,7 @@ export function ItemPageContent({ item, itemId }: ItemPageContentProps) {
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const isAuthor = user?.id === item.seller_id;
@@ -186,6 +187,24 @@ export function ItemPageContent({ item, itemId }: ItemPageContentProps) {
     setNewImagePreviews([]);
     setError(null);
     newImagePreviews.forEach(URL.revokeObjectURL);
+  };
+
+  const handleDelete = async () => {
+    if (!canEdit || !window.confirm("Удалить товар? Это действие нельзя отменить.")) return;
+    setIsDeleting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/items/${itemId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error ?? "Ошибка удаления");
+      }
+      router.push("/seller");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Не удалось удалить товар");
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const displayImageUrls = isEditing ? [...currentImageUrls, ...newImagePreviews] : (item.image_urls || []);
@@ -461,12 +480,21 @@ export function ItemPageContent({ item, itemId }: ItemPageContentProps) {
                 </div>
 
                 {isEditing && (
-                  <div className="flex gap-4">
-                    <Button onClick={handleSave} disabled={loading}>
+                  <div className="flex flex-wrap gap-4">
+                    <Button onClick={handleSave} disabled={loading || isDeleting}>
                       {loading ? "Сохранение..." : "Сохранить"}
                     </Button>
-                    <Button variant="outline" onClick={handleCancel} disabled={loading}>
+                    <Button variant="outline" onClick={handleCancel} disabled={loading || isDeleting}>
                       Отмена
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={handleDelete}
+                      disabled={loading || isDeleting}
+                      className="gap-2"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      {isDeleting ? "Удаление..." : "Удалить товар"}
                     </Button>
                   </div>
                 )}
