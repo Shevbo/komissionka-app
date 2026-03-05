@@ -102,13 +102,26 @@ type Testimonial = {
   rating?: number | null;
 };
 
-/** Подсказка по диагностике при ошибке «Не удалось отправить запрос к агенту» и при 502 от API агента. */
-const AGENT_DIAGNOSTIC_HINT = [
-  "Проверьте на сервере:",
-  "• Агент запущен: pm2 list — процесс agent в статусе online.",
-  "• Health: curl -s http://127.0.0.1:3140/health (или порт из AGENT_PORT в .env) возвращает {\"status\":\"ok\"}.",
-  "• Логи при нажатии кода подтверждения: pm2 logs agent --lines 100 — по ним видно, доходит ли запрос и не падает ли агент при вызове модели.",
-].join("\n");
+/** После ошибки агента запрашивает /api/admin/agent/diagnose и добавляет в чат сообщение с выводом команд. */
+function appendAgentDiagnoseToChat(
+  setAiMessagesForCurrentSession: React.Dispatch<React.SetStateAction<{ role: string; content: string; timestamp: number }[]>>
+) {
+  fetch("/api/admin/agent/diagnose", { credentials: "include" })
+    .then((r) => r.json())
+    .then((data: { ok?: boolean; output?: string }) => {
+      if (data.ok && typeof data.output === "string" && data.output.trim()) {
+        setAiMessagesForCurrentSession((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: "Результаты выполнения на сервере:\n\n" + data.output.trim(),
+            timestamp: Date.now(),
+          },
+        ]);
+      }
+    })
+    .catch(() => {});
+}
 
 export default function AdminPage() {
   const router = useRouter();
@@ -1761,7 +1774,8 @@ export default function AdminPage() {
                                 const data = (await res.json()) as { result?: string; error?: string; steps?: Array<{ type: string; text: string; detail?: string }>; logId?: string | null };
                                 if (!res.ok) {
                                   const errMsg = data.error ?? String(res.status);
-                                  setAiMessagesForCurrentSession((prev) => [...prev, { role: "assistant", content: `Ошибка: ${errMsg}\n\n${AGENT_DIAGNOSTIC_HINT}`, timestamp: Date.now() }]);
+                                  setAiMessagesForCurrentSession((prev) => [...prev, { role: "assistant", content: `Ошибка: ${errMsg}`, timestamp: Date.now() }]);
+                                  appendAgentDiagnoseToChat(setAiMessagesForCurrentSession);
                                   return;
                                 }
                                 setAiLastSteps(data.steps ?? []);
@@ -1782,8 +1796,9 @@ export default function AdminPage() {
                               } else {
                                 setAiMessagesForCurrentSession((prev) => [
                                   ...prev,
-                                  { role: "assistant", content: `Не удалось отправить запрос к агенту.\n\n${AGENT_DIAGNOSTIC_HINT}`, timestamp: Date.now() },
+                                  { role: "assistant", content: "Не удалось отправить запрос к агенту.", timestamp: Date.now() },
                                 ]);
+                                appendAgentDiagnoseToChat(setAiMessagesForCurrentSession);
                               }
                             } finally {
                               window.clearTimeout(timeoutId);
