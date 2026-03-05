@@ -26,6 +26,8 @@ fi
 echo "[3/4] Prisma generate + migrate deploy..."
 npx prisma generate
 npx prisma migrate deploy
+# Повторная генерация Prisma после миграций — на сервере агент иногда падал с «does not provide export named PrismaClient»
+npx prisma generate
 
 echo "[4/4] Building app and restarting PM2..."
 npm run build

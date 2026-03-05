@@ -201,6 +201,10 @@ export function runCommand(
   }
   if (isPrismaCommand && process.env.DATABASE_URL) safeEnv.DATABASE_URL = process.env.DATABASE_URL;
   safeEnv.NODE_ENV = process.env.NODE_ENV ?? "production";
+  // Чтобы в дочернем процессе находились npx/tsx из корня проекта (исправляет «tsx: not found» на сервере)
+  const nodeBin = join(root, "node_modules", ".bin");
+  const existingPath = process.env.PATH ?? "";
+  safeEnv.PATH = process.platform === "win32" ? `${nodeBin};${existingPath}` : `${nodeBin}:${existingPath}`;
 
   // Для curl к приложению (AGENT_APP_URL) подставляем заголовок авторизации агента
   let cmd = normalizedCommand;
