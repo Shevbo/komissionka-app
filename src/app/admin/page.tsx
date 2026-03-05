@@ -102,28 +102,6 @@ type Testimonial = {
   rating?: number | null;
 };
 
-/** После ошибки агента запрашивает /api/admin/agent/diagnose и добавляет в чат сообщение с выводом команд. */
-function appendAgentDiagnoseToChat(
-  setAiMessagesForCurrentSession: React.Dispatch<React.SetStateAction<{ role: string; content: string; timestamp: number }[]>>
-) {
-  fetch("/api/admin/agent/diagnose", { credentials: "include" })
-    .then((r) => r.json())
-    .then((data: { ok?: boolean; output?: string }) => {
-      const output = typeof data.output === "string" ? data.output.trim() : "";
-      if (data.ok && output) {
-        setAiMessagesForCurrentSession((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            content: "Результаты выполнения на сервере:\n\n" + output,
-            timestamp: Date.now(),
-          },
-        ]);
-      }
-    })
-    .catch(() => {});
-}
-
 export default function AdminPage() {
   const router = useRouter();
   const { user: currentUser, userRole, loading: authLoading, profile, refreshProfile } = useAuth();
@@ -367,6 +345,26 @@ export default function AdminPage() {
     },
     [activeAiSessionId]
   );
+
+  /** После ошибки агента запрашивает /api/admin/agent/diagnose и добавляет в чат вывод pm2 list, curl health, pm2 logs. */
+  const appendAgentDiagnoseToChat = useCallback(() => {
+    fetch("/api/admin/agent/diagnose", { credentials: "include" })
+      .then((r) => r.json())
+      .then((data: { ok?: boolean; output?: string }) => {
+        const output = typeof data.output === "string" ? data.output.trim() : "";
+        if (data.ok && output) {
+          setAiMessagesForCurrentSession((prev) => [
+            ...prev,
+            {
+              role: "assistant",
+              content: "Результаты выполнения на сервере:\n\n" + output,
+              timestamp: Date.now(),
+            },
+          ]);
+        }
+      })
+      .catch(() => {});
+  }, [setAiMessagesForCurrentSession]);
 
   const updateActiveSessionTitle = useCallback(
     (firstUserMessage: string) => {
@@ -1776,7 +1774,7 @@ export default function AdminPage() {
                                 if (!res.ok) {
                                   const errMsg = data.error ?? String(res.status);
                                   setAiMessagesForCurrentSession((prev) => [...prev, { role: "assistant", content: `Ошибка: ${errMsg}`, timestamp: Date.now() }]);
-                                  appendAgentDiagnoseToChat(setAiMessagesForCurrentSession);
+                                  appendAgentDiagnoseToChat();
                                   return;
                                 }
                                 setAiLastSteps(data.steps ?? []);
@@ -1799,7 +1797,7 @@ export default function AdminPage() {
                                   ...prev,
                                   { role: "assistant", content: "Не удалось отправить запрос к агенту.", timestamp: Date.now() },
                                 ]);
-                                appendAgentDiagnoseToChat(setAiMessagesForCurrentSession);
+                                appendAgentDiagnoseToChat();
                               }
                             } finally {
                               window.clearTimeout(timeoutId);
