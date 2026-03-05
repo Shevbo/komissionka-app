@@ -111,6 +111,27 @@ export async function POST(
     });
   } catch (e: unknown) {
     console.error("Failed to generate item image via Gemini:", e);
+    const err = e as Error & { error?: { message?: string }; status?: number };
+    const msg = err?.message ?? "";
+    const apiMessage: string | undefined =
+      typeof err?.error?.message === "string" ? err.error.message : msg;
+
+    if (apiMessage?.includes("This API is not available in your current location")) {
+      return NextResponse.json(
+        {
+          error:
+            "Сервис генерации изображений Gemini недоступен с текущего региона. Задайте в .env прокси: AGENT_PROXY (или AGENT_HTTPS_PROXY) и перезапустите приложение.",
+        },
+        { status: 503 }
+      );
+    }
+    if (msg.includes("AGENT_PROXY") && msg.includes("задайте прокси")) {
+      return NextResponse.json(
+        { error: "Задайте в .env прокси для Gemini: AGENT_PROXY или AGENT_HTTPS_PROXY или AGENT_HTTP_PROXY, затем перезапустите приложение." },
+        { status: 503 }
+      );
+    }
+
     return NextResponse.json(
       { error: "Не удалось сгенерировать иллюстрацию для товара" },
       { status: 500 }

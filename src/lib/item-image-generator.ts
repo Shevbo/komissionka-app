@@ -1,22 +1,23 @@
-import { GoogleGenAI } from "@google/genai";
+/**
+ * Генерация иллюстраций к товарам через Gemini API.
+ * Все запросы к Gemini идут строго через прокси из .env (AGENT_PROXY / AGENT_HTTPS_PROXY / AGENT_HTTP_PROXY).
+ */
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { ProxyAgent, fetch as undiciFetch } from "undici";
 
 const UPLOADS_ITEMS_DIR = path.join(process.cwd(), "public", "uploads", "items");
-const DEFAULT_MODEL = process.env.ITEM_IMAGE_MODEL || "gemini-2.5-flash";
+const DEFAULT_MODEL = process.env.ITEM_IMAGE_MODEL || "gemini-2.0-flash-exp";
+const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
+const PROXY_CONNECT_TIMEOUT_MS = Number(process.env.AGENT_PROXY_CONNECT_TIMEOUT_MS) || 30_000;
 
-let aiClient: GoogleGenAI | null = null;
-
-function getClient(): GoogleGenAI {
-  if (!aiClient) {
-    const apiKey = process.env.AGENT_LLM_API_KEY;
-    if (!apiKey) {
-      throw new Error("AGENT_LLM_API_KEY is not configured");
-    }
-    aiClient = new GoogleGenAI({ apiKey });
-  }
-  return aiClient;
+function getProxyUrl(): string | undefined {
+  const u =
+    process.env.AGENT_PROXY ??
+    process.env.AGENT_HTTPS_PROXY ??
+    process.env.AGENT_HTTP_PROXY;
+  return typeof u === "string" && u.trim() ? u.trim() : undefined;
 }
 
 type GenerateItemImageParams = {
@@ -32,6 +33,11 @@ export async function generateItemImageFile(params: GenerateItemImageParams): Pr
 }> {
   const { itemId, title, description, variantIndex } = params;
 
+  const apiKey = process.env.AGENT_LLM_API_KEY;
+  if (!apiKey) {
+    throw new Error("AGENT_LLM_API_KEY is not configured");
+  }
+
   const promptParts: string[] = [];
   promptParts.push(
     "Сгенерируй фотореалистичное изображение товара для онлайн-комиссионки. Без текста, без логотипов и без водяных знаков, на нейтральном фоне."
@@ -45,24 +51,64 @@ export async function generateItemImageFile(params: GenerateItemImageParams): Pr
   }
   const prompt = promptParts.join("\n");
 
-  const ai = getClient();
-  const interaction: any = await ai.interactions.create({
-    model: DEFAULT_MODEL,
-    input: [{ type: "text", text: prompt }],
-    response_modalities: ["image"],
-  });
+  const url = `${GEMINI_BASE}/models/${DEFAULT_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const body = {
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+    generationConfig: {
+      responseModalities: ["TEXT", "IMAGE"],
+      maxOutputTokens: 4096,
+    },
+  };
 
-  const outputs: any[] = interaction?.outputs ?? [];
-  const imageOutput = outputs.find(
-    (o) => o && o.type === "image" && typeof o.data === "string"
-  );
+  const fetchOptions: RequestInit & { dispatcher?: import("undici").Dispatcher } = {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  };
 
-  if (!imageOutput) {
+  const proxyUrl = getProxyUrl();
+  if (!proxyUrl) {
+    throw new Error(
+      "Для запросов к Gemini задайте прокси в .env: AGENT_PROXY или AGENT_HTTPS_PROXY или AGENT_HTTP_PROXY (например AGENT_PROXY=https://proxy.example.com:8080)"
+    );
+  }
+  fetchOptions.dispatcher = new ProxyAgent({
+    uri: proxyUrl,
+    proxyTls: { timeout: PROXY_CONNECT_TIMEOUT_MS },
+  }) as import("undici").Dispatcher;
+
+  const res = await undiciFetch(url, fetchOptions as any);
+  const text = await res.text();
+  if (!res.ok) {
+    let errPayload: unknown;
+    try {
+      errPayload = JSON.parse(text);
+    } catch {
+      errPayload = { error: { message: text.slice(0, 500) } };
+    }
+    const err = new Error(
+      typeof (errPayload as any)?.error?.message === "string"
+        ? (errPayload as any).error.message
+        : `Gemini API ${res.status}: ${text.slice(0, 300)}`
+    ) as Error & { status?: number; error?: unknown };
+    err.status = res.status;
+    err.error = errPayload;
+    throw err;
+  }
+
+  const data = JSON.parse(text) as {
+    candidates?: Array<{
+      content?: { parts?: Array<{ text?: string; inlineData?: { mimeType?: string; data?: string } }> };
+    }>;
+  };
+  const parts = data.candidates?.[0]?.content?.parts ?? [];
+  const imagePart = parts.find((p) => p?.inlineData?.data);
+  if (!imagePart?.inlineData?.data) {
     throw new Error("Gemini не вернул изображение");
   }
 
-  const mimeType: string = imageOutput.mime_type || "image/png";
-  const base64: string = imageOutput.data;
+  const mimeType: string = imagePart.inlineData.mimeType || "image/png";
+  const base64: string = imagePart.inlineData.data;
 
   const ext =
     mimeType.includes("png") ? "png" :
@@ -78,9 +124,8 @@ export async function generateItemImageFile(params: GenerateItemImageParams): Pr
   const filePath = path.join(UPLOADS_ITEMS_DIR, filename);
   await writeFile(filePath, buf);
 
-  const url = `/uploads/items/${filename}`;
-
-  return { url, filename };
+  const imageUrl = `/uploads/items/${filename}`;
+  return { url: imageUrl, filename };
 }
 
 export async function generateItemImagesBatch(params: {
@@ -104,4 +149,3 @@ export async function generateItemImagesBatch(params: {
 
   return urls;
 }
-
