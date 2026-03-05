@@ -102,6 +102,14 @@ type Testimonial = {
   rating?: number | null;
 };
 
+/** Подсказка по диагностике при ошибке «Не удалось отправить запрос к агенту» и при 502 от API агента. */
+const AGENT_DIAGNOSTIC_HINT = [
+  "Проверьте на сервере:",
+  "• Агент запущен: pm2 list — процесс agent в статусе online.",
+  "• Health: curl -s http://127.0.0.1:3140/health (или порт из AGENT_PORT в .env) возвращает {\"status\":\"ok\"}.",
+  "• Логи при нажатии кода подтверждения: pm2 logs agent --lines 100 — по ним видно, доходит ли запрос и не падает ли агент при вызове модели.",
+].join("\n");
+
 export default function AdminPage() {
   const router = useRouter();
   const { user: currentUser, userRole, loading: authLoading, profile, refreshProfile } = useAuth();
@@ -1752,7 +1760,8 @@ export default function AdminPage() {
                               } else {
                                 const data = (await res.json()) as { result?: string; error?: string; steps?: Array<{ type: string; text: string; detail?: string }>; logId?: string | null };
                                 if (!res.ok) {
-                                  setAiMessagesForCurrentSession((prev) => [...prev, { role: "assistant", content: `Ошибка: ${data.error ?? res.status}`, timestamp: Date.now() }]);
+                                  const errMsg = data.error ?? String(res.status);
+                                  setAiMessagesForCurrentSession((prev) => [...prev, { role: "assistant", content: `Ошибка: ${errMsg}\n\n${AGENT_DIAGNOSTIC_HINT}`, timestamp: Date.now() }]);
                                   return;
                                 }
                                 setAiLastSteps(data.steps ?? []);
@@ -1773,7 +1782,7 @@ export default function AdminPage() {
                               } else {
                                 setAiMessagesForCurrentSession((prev) => [
                                   ...prev,
-                                  { role: "assistant", content: "Не удалось отправить запрос к агенту.", timestamp: Date.now() },
+                                  { role: "assistant", content: `Не удалось отправить запрос к агенту.\n\n${AGENT_DIAGNOSTIC_HINT}`, timestamp: Date.now() },
                                 ]);
                               }
                             } finally {
