@@ -24,7 +24,7 @@ async function syncBacklogToDocs(): Promise<void> {
   const rows = await prisma.backlog.findMany({
     orderBy: [{ order_num: "asc" }, { created_at: "desc" }],
   });
-  const list: BacklogRow[] = rows.map((r) => ({
+  const list: BacklogRow[] = rows.map((r: typeof rows[number]) => ({
     id: r.id,
     order_num: r.order_num,
     sprint_number: r.sprint_number,
