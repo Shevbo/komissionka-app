@@ -36,9 +36,13 @@ echo "[1/6] Cloning repository..."
 git clone --branch "$BRANCH" https://github.com/Shevbo/komissionka-app.git "$ENV_DIR"
 cd "$ENV_DIR"
 
-# Install dependencies
+# Install dependencies (with memory limit for constrained VPS)
 echo "[2/6] Installing dependencies..."
-npm ci || npm install
+export NODE_OPTIONS="--max-old-space-size=512"
+npm install --prefer-offline --no-audit --no-fund || {
+  echo "First npm install failed, retrying with reduced parallelism..."
+  npm install --prefer-offline --no-audit --no-fund --maxsockets=2
+}
 
 # Create database
 echo "[3/6] Creating database..."
@@ -56,8 +60,9 @@ echo "[5/6] Running Prisma migrations..."
 npx prisma generate
 npx prisma db push --accept-data-loss
 
-# Build and start PM2
+# Build and start PM2 (keep NODE_OPTIONS for build)
 echo "[6/6] Building and starting PM2 processes..."
+export NODE_OPTIONS="--max-old-space-size=512"
 npm run build
 
 # Create PM2 ecosystem for this environment
