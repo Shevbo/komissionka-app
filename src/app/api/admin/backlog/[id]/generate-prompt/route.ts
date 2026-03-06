@@ -52,6 +52,59 @@ type GenerateResponse = {
   complexity?: number | null;
 };
 
+/**
+ * Извлекает блок ```json ... ``` из текста, учитывая что внутри JSON-строк
+ * могут быть тройные обратные кавычки (например код в prompt_markdown).
+ * Ищет закрывающие ``` только вне строки в кавычках.
+ */
+function extractJsonBlockFromMarkdown(raw: string): { content: string; fullMatch: string; start: number; end: number } | null {
+  const openTag = "```json";
+  const openTagAlt = "```";
+  const idx = raw.indexOf(openTag);
+  const startBlock = idx >= 0 ? idx : raw.indexOf(openTagAlt);
+  if (startBlock < 0) return null;
+  const contentStart = idx >= 0 ? startBlock + openTag.length : startBlock + openTagAlt.length;
+  const afterOpen = raw.slice(contentStart).replace(/^\s*\n?/, "");
+  const contentStartAdjusted = contentStart + (raw.slice(contentStart).length - afterOpen.length);
+  let inString = false;
+  let escape = false;
+  let i = contentStartAdjusted;
+  while (i < raw.length - 2) {
+    const c = raw[i];
+    if (escape) {
+      escape = false;
+      i++;
+      continue;
+    }
+    if (inString) {
+      if (c === "\\") {
+        escape = true;
+        i++;
+        continue;
+      }
+      if (c === '"') {
+        inString = false;
+        i++;
+        continue;
+      }
+      i++;
+      continue;
+    }
+    if (c === '"') {
+      inString = true;
+      i++;
+      continue;
+    }
+    if (c === "`" && raw[i + 1] === "`" && raw[i + 2] === "`") {
+      const content = raw.slice(contentStartAdjusted, i).trim();
+      const fullMatch = raw.slice(startBlock, i + 3);
+      return { content, fullMatch, start: startBlock, end: i + 3 };
+    }
+    i++;
+  }
+  return null;
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -143,6 +196,7 @@ export async function POST(
     "",
     "Требования к prompt_markdown:",
     "- только про саму задачу (что сделать, какие файлы/эндпоинты, как реализовать); без разделов «как тестировать»;",
+    "- структурированный и понятный человеку; отражает суть задачи с минимально необходимой детализацией;",
     "- Markdown с заголовками и списками; можно указать, какие части выполнять поэтапно.",
     "",
     "Формат ОТВЕТА (ОБЯЗАТЕЛЬНО, БЕЗ ДОПОЛНИТЕЛЬНОГО ТЕКСТА ВНЕ JSON):",
@@ -199,29 +253,41 @@ export async function POST(
   const durationSec = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
 
   const raw = (data.result ?? "").trim();
-  const jsonMatch = /```json\s*([\s\S]*?)```/i.exec(raw) ?? /(\{[\s\S]*\})/.exec(raw);
+  const extracted = extractJsonBlockFromMarkdown(raw);
   let parsed: GenerateResponse | null = null;
   let prefix = "";
   let suffix = "";
-  if (jsonMatch) {
-    const fullMatch = jsonMatch[0];
-    const matchStart = raw.indexOf(fullMatch);
-    if (matchStart >= 0) {
-      prefix = raw.slice(0, matchStart).trim();
-      suffix = raw.slice(matchStart + fullMatch.length).trim();
-    }
+  let jsonBlockFound = false;
+
+  if (extracted) {
+    jsonBlockFound = true;
+    prefix = raw.slice(0, extracted.start).trim();
+    suffix = raw.slice(extracted.end).trim();
     try {
-      parsed = JSON.parse(jsonMatch[1]!) as GenerateResponse;
+      parsed = JSON.parse(extracted.content) as GenerateResponse;
     } catch {
       parsed = null;
     }
-  } else {
-    // Нет JSON — пробуем вырезать подвал агента (--- Модель: ... Службы: ...)
+  }
+  if (!extracted) {
+    const fallback = /(\{[\s\S]*\})/.exec(raw);
+    if (fallback) {
+      try {
+        parsed = JSON.parse(fallback[1]!) as GenerateResponse;
+        jsonBlockFound = true;
+        const matchStart = fallback.index;
+        prefix = raw.slice(0, matchStart).trim();
+        suffix = raw.slice(matchStart + fallback[0].length).trim();
+      } catch {
+        parsed = null;
+      }
+    }
+  }
+  if (!jsonBlockFound) {
     const footerStart = raw.indexOf("\n\n---\nМодель:");
     if (footerStart >= 0) {
       suffix = raw.slice(footerStart).trim();
       const middle = raw.slice(0, footerStart).trim();
-      // Преамбула — всё до первого значимого контента (например до ``` или до первой строки задачи)
       const codeBlockStart = middle.search(/\n\s*```/);
       if (codeBlockStart > 0) prefix = middle.slice(0, codeBlockStart).trim();
       else if (middle.length > 0) prefix = middle.slice(0, Math.min(200, middle.length)).trim();
@@ -232,10 +298,8 @@ export async function POST(
   let promptMarkdown: string;
   if (parsed && typeof parsed.prompt_markdown === "string" && parsed.prompt_markdown.trim().length > 0) {
     promptMarkdown = parsed.prompt_markdown.trim();
-  } else if (raw.length > 0 && jsonMatch) {
-    const fullMatch = jsonMatch[0];
-    const matchStart = raw.indexOf(fullMatch);
-    const afterJson = matchStart >= 0 ? raw.slice(matchStart + fullMatch.length).trim() : raw;
+  } else if (raw.length > 0 && jsonBlockFound) {
+    const afterJson = suffix;
     const withoutFooter = afterJson.includes("\n\n---\nМодель:") ? afterJson.slice(0, afterJson.indexOf("\n\n---\nМодель:")).trim() : afterJson;
     promptMarkdown = withoutFooter.length > 0 ? withoutFooter : row.description_prompt ?? "";
   } else if (raw.length > 0) {
