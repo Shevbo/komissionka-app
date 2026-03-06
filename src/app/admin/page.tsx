@@ -265,7 +265,20 @@ export default function AdminPage() {
   const [adminTopMenuOpen, setAdminTopMenuOpen] = useState(false);
 
   /** Активная вкладка админки (для прокрутки чата при открытии «Комиссионка AI»). */
-  const [adminTab, setAdminTab] = useState("items");
+  const [adminTab, setAdminTabState] = useState(() => {
+    if (typeof window !== "undefined") {
+      const hash = window.location.hash.replace("#", "");
+      const validTabs = ["items", "users", "content", "news", "testimonials", "backlog", "ai", "cache"];
+      if (validTabs.includes(hash)) return hash;
+    }
+    return "items";
+  });
+  const setAdminTab = useCallback((tab: string) => {
+    setAdminTabState(tab);
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", `#${tab}`);
+    }
+  }, []);
 
   const activeAiSession = useMemo(
     () => aiSessions.find((s) => s.id === activeAiSessionId && s.mode === aiMode) ?? null,
@@ -2207,23 +2220,23 @@ export default function AdminPage() {
               </CardContent>
             </Card>
 
-            {backlogEditId && (() => {
-              const row = backlog.find((b) => b.id === backlogEditId);
-              if (!row) return null;
-              const ef = backlogEditForm.id === row.id ? backlogEditForm : { ...row };
-              const setEf = (up: Partial<BacklogItem>) =>
-                setBacklogEditForm((prev) => (prev.id === row.id ? { ...prev, ...up } : { ...row, ...up }));
-              return (
-                <Dialog
-                  open={!!backlogEditId}
-                  onOpenChange={(open) => {
-                    if (!open) {
-                      setBacklogEditId(null);
-                      setBacklogEditForm({});
-                      setPromptAboutExpandedEdit(false);
-                    }
-                  }}
-                >
+            <Dialog
+              open={backlogEditId !== null}
+              onOpenChange={(open) => {
+                if (!open) {
+                  setBacklogEditId(null);
+                  setBacklogEditForm({});
+                  setPromptAboutExpandedEdit(false);
+                }
+              }}
+            >
+              {(() => {
+                const row = backlogEditId ? backlog.find((b) => b.id === backlogEditId) : null;
+                if (!row) return null;
+                const ef = backlogEditForm.id === row.id ? backlogEditForm : { ...row };
+                const setEf = (up: Partial<BacklogItem>) =>
+                  setBacklogEditForm((prev) => (prev.id === row.id ? { ...prev, ...up } : { ...row, ...up }));
+                return (
                   <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                       <DialogTitle>Редактировать запись бэклога</DialogTitle>
@@ -2468,9 +2481,9 @@ export default function AdminPage() {
                       </div>
                     </div>
                   </DialogContent>
-                </Dialog>
-              );
-            })()}
+                );
+              })()}
+            </Dialog>
           </TabsContent>
 
           <TabsContent value="ai" className="space-y-6 overflow-x-hidden">
