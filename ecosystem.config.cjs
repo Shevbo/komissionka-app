@@ -30,5 +30,17 @@ module.exports = {
       max_memory_restart: "200M",
       env: { NODE_OPTIONS: "--max-old-space-size=192", TZ: "Europe/Moscow" },
     },
+    {
+      name: "deploy-worker",
+      script: "npx",
+      args: "tsx scripts/deploy-worker.ts",
+      cwd: __dirname,
+      max_memory_restart: "150M",
+      env: {
+        NODE_OPTIONS: "--max-old-space-size=128",
+        TZ: "Europe/Moscow",
+        SCRIPTS_DIR: `${__dirname}/scripts`,
+      },
+    },
   ],
 };

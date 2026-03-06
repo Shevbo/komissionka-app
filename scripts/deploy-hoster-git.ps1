@@ -1,19 +1,25 @@
 param(
     [string]$Branch = "main",
+    # Целевая среда: "prod" (по умолчанию) или имя тестовой среды (test1, test2...)
+    [string]$Env = "prod",
     # Если true — деплой разрешён даже при неком чистом рабочем дереве (НЕ рекомендуется).
     [switch]$AllowDirty = $false,
     # Игнорируем изменения/неотслеживаемые файлы Cursor (.cursor/...), чтобы они не блокировали деплой.
-    [switch]$IgnoreCursor = $true
+    [switch]$IgnoreCursor = $true,
+    # Использовать API очереди вместо прямого SSH (для тестовых сред)
+    [switch]$UseQueue = $false
 )
 
 $HostAlias = "hoster"
-$RemotePath = "~/komissionka"
+$RemotePath = if ($Env -eq "prod") { "~/komissionka" } else { "~/komissionka-$Env" }
+$ApiUrl = "http://83.69.248.175:3000/api/deploy"
 $ProjectRoot = Split-Path $PSScriptRoot -Parent
 if (-not (Test-Path "$ProjectRoot\package.json")) { $ProjectRoot = (Get-Location).Path }
 
 Push-Location $ProjectRoot
 try {
     Write-Host "[deploy-hoster-git] Project root: $ProjectRoot" -ForegroundColor Gray
+    Write-Host "[deploy-hoster-git] Target environment: $Env" -ForegroundColor Gray
 
     # 1) Проверка чистоты рабочего дерева
     $status = git status --porcelain --untracked-files=all
@@ -46,15 +52,41 @@ try {
         throw "git push origin $Branch failed"
     }
 
-    # 3) Запускаем серверный скрипт deploy-from-git.sh
-    Write-Host "[2/2] Running deploy-from-git.sh on $HostAlias..." -ForegroundColor Cyan
-    $cmd = "cd $RemotePath && bash scripts/deploy-from-git.sh $Branch"
-    ssh $HostAlias $cmd
-    if ($LASTEXITCODE -ne 0) {
-        throw "Remote deploy-from-git.sh failed"
+    # 3) Деплой — через API очереди или прямой SSH
+    if ($UseQueue -or $Env -ne "prod") {
+        Write-Host "[2/2] Adding deploy to queue via API ($Env)..." -ForegroundColor Cyan
+        $body = @{
+            environment_name = $Env
+            operation = "deploy"
+            branch = $Branch
+            requested_by = "deploy-hoster-git.ps1"
+        } | ConvertTo-Json
+        
+        try {
+            $response = Invoke-RestMethod -Uri "$ApiUrl/queue" -Method POST -ContentType "application/json" -Body $body
+            if ($response.ok) {
+                Write-Host "Deploy queued successfully. Queue ID: $($response.id)" -ForegroundColor Green
+            } else {
+                throw "API returned error: $($response.error)"
+            }
+        } catch {
+            Write-Host "Failed to queue via API, falling back to direct SSH..." -ForegroundColor Yellow
+            $cmd = "cd $RemotePath && bash scripts/env-deploy.sh $Env $Branch"
+            ssh $HostAlias $cmd
+            if ($LASTEXITCODE -ne 0) {
+                throw "Remote env-deploy.sh failed"
+            }
+        }
+    } else {
+        Write-Host "[2/2] Running deploy-from-git.sh on $HostAlias (prod)..." -ForegroundColor Cyan
+        $cmd = "cd $RemotePath && bash scripts/deploy-from-git.sh $Branch"
+        ssh $HostAlias $cmd
+        if ($LASTEXITCODE -ne 0) {
+            throw "Remote deploy-from-git.sh failed"
+        }
     }
 
-    Write-Host "Deploy from git completed successfully. Commit: $commit" -ForegroundColor Green
+    Write-Host "Deploy to $Env completed. Commit: $commit" -ForegroundColor Green
 }
 catch {
     Write-Host "`nError in deploy-hoster-git.ps1: $_" -ForegroundColor Red

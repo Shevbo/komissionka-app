@@ -41,6 +41,7 @@ import { getModeButtonLabel } from "komiss/lib/agent-mode-labels";
 import { AdminItemsTable } from "komiss/components/admin-items-table";
 import { ActivityOperationsDialog } from "komiss/components/ActivityOperationsDialog";
 import { AgentCacheBrowser } from "komiss/components/AgentCacheBrowser";
+import { DeployTab } from "komiss/components/DeployTab";
 import { WysiwygEditor } from "komiss/components/WysiwygEditor";
 import { Pencil, Trash2 } from "lucide-react";
 
@@ -269,7 +270,7 @@ export default function AdminPage() {
   const [adminTab, setAdminTabState] = useState(() => {
     if (typeof window !== "undefined") {
       const hash = window.location.hash.replace("#", "");
-      const validTabs = ["items", "users", "content", "news", "testimonials", "backlog", "ai", "cache"];
+      const validTabs = ["items", "users", "content", "news", "testimonials", "backlog", "ai", "cache", "deploy"];
       if (validTabs.includes(hash)) return hash;
     }
     return "items";
@@ -1269,6 +1270,7 @@ export default function AdminPage() {
             <TabsTrigger value="backlog">Бэклог</TabsTrigger>
             <TabsTrigger value="ai">Комиссионка AI</TabsTrigger>
             <TabsTrigger value="cache">Кэш промптов</TabsTrigger>
+            <TabsTrigger value="deploy">Деплой</TabsTrigger>
           </TabsList>
 
           <TabsContent value="items" className="space-y-6">
@@ -2900,6 +2902,10 @@ export default function AdminPage() {
 
           <TabsContent value="cache" className="space-y-6">
             <AgentCacheBrowser />
+          </TabsContent>
+
+          <TabsContent value="deploy" className="space-y-6">
+            <DeployTab />
           </TabsContent>
         </Tabs>
       </main>
