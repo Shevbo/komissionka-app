@@ -184,7 +184,7 @@ export async function POST(
   const updated = await prisma.backlog.update({
     where: { id: row.id },
     data: {
-      description_prompt: parsed.prompt_markdown,
+      description_prompt: promptMarkdown,
       task_type: parsed?.task_type ?? row.task_type,
       modules: modules ?? row.modules,
       components: components ?? row.components,
