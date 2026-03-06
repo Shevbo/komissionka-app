@@ -80,8 +80,7 @@ async function syncBacklogToDocs(): Promise<void> {
     created_at: r.created_at?.toISOString() ?? null,
     status_changed_at: r.status_changed_at?.toISOString() ?? null,
   }));
-  const rootDir = process.cwd();
-  syncBacklogToDoc(list, rootDir);
+  syncBacklogToDoc(list, process.cwd());
 }
 
 export async function POST(request: Request) {

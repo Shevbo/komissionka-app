@@ -69,6 +69,7 @@ npx tsx scripts/version-bump.ts <app|agent|tgbot> <major|minor|patch> — обн
 pm2 restart komissionka agent bot — перезапуск служб на сервере (PM2)
 npx tsx scripts/count-core-lines.ts — подсчёт строк в core (app, agent, tgbot) для отчёта о версионности
 npx tsx scripts/<имя>.ts — запуск скриптов из scripts/ (например seed-five-users.ts, seed-demo.ts); имя файла — только латиница, цифры, дефис, подчёркивание
+npx tsx scripts/backlog-cli.ts <cmd> — управление бэклогом через Prisma (list/get/create/update/delete); используется агентом и Cursor для чтения и изменения backlog
 npx tsx scripts/cleanup-users-and-items.ts — удаление всех карточек товаров и пользователей, кроме bshevelev@mail.ru (режим разработка)`;
 }
 export const ALLOWED_COMMANDS_READABLE = getAllowedCommandsReadable();

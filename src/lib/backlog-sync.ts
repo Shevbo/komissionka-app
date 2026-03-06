@@ -2,8 +2,8 @@
  * Синхронизация таблицы backlog в docs/backlog.md для учёта (дубликат для администратора и ИИ).
  */
 
-import { writeFileSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 export type BacklogRow = {
   id: string;
@@ -23,8 +23,23 @@ function escapeCell(s: string): string {
   return s.replace(/\r/g, "").replace(/\n/g, " ").replace(/\|/g, "\\|");
 }
 
+function resolveProjectRoot(startDir: string): string {
+  let dir = startDir;
+  // Ищем package.json вверх по дереву (ограничимся несколькими уровнями, чтобы не выйти за пределы проекта)
+  for (let i = 0; i < 6; i += 1) {
+    if (existsSync(join(dir, "package.json"))) {
+      return dir;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return startDir;
+}
+
 /** Формирует Markdown-таблицу бэклога и записывает в docs/backlog.md */
-export function syncBacklogToDoc(rows: BacklogRow[], rootDir: string): void {
+export function syncBacklogToDoc(rows: BacklogRow[], cwd: string | undefined): void {
+  const rootDir = resolveProjectRoot(cwd ?? process.cwd());
   const header = [
     "№",
     "Спринт",

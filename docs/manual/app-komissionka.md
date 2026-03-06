@@ -97,6 +97,7 @@ src/
 | Настройки сайта | [src/app/api/admin/site-settings/route.ts](../src/app/api/admin/site-settings/route.ts) | hero, баннеры, параметры каталога (колонки, ширина карточки, расстояние между карточками, отступ текста в карточке, размеры шрифтов заголовка и текста), agent_llm_model, agent_mode; редактируются во вкладке «Контент» админ‑панели |
 | Роли | [src/app/api/admin/profiles/[id]/role/route.ts](../src/app/api/admin/profiles/[id]/role/route.ts) | Обновление role (защита от снятия admin с себя) |
 | Привязка Telegram | [src/app/api/admin/telegram-bind-code/route.ts](../src/app/api/admin/telegram-bind-code/route.ts) | Генерация кода привязки |
+| Бэклог | [src/app/api/admin/backlog/route.ts](../src/app/api/admin/backlog/route.ts), `[id]/route.ts`, [scripts/backlog-cli.ts](../scripts/backlog-cli.ts), [docs/backlog.md](../docs/backlog.md) | Таблица backlog в БД + дубликат в docs/backlog.md. Через UI админки и CLI `npx tsx scripts/backlog-cli.ts` описываются хотелки, статусы спринта и задач, ссылки на документацию и сценарии тестирования; это основной канал постановки задач для агента и Cursor. |
 
 ### 3.6 Загрузка файлов
 
