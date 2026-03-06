@@ -42,6 +42,7 @@ import { AdminItemsTable } from "komiss/components/admin-items-table";
 import { ActivityOperationsDialog } from "komiss/components/ActivityOperationsDialog";
 import { AgentCacheBrowser } from "komiss/components/AgentCacheBrowser";
 import { WysiwygEditor } from "komiss/components/WysiwygEditor";
+import { Pencil, Trash2 } from "lucide-react";
 
 type Item = {
   id: string;
@@ -2105,22 +2106,17 @@ export default function AdminPage() {
               </CardHeader>
               <CardContent className="overflow-x-auto">
                 {backlog.length > 0 ? (
-                  <Table>
+                  <Table className="text-[0.8rem]">
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-10">№</TableHead>
-                        <TableHead>Спринт</TableHead>
-                        <TableHead>Статус спринта</TableHead>
-                        <TableHead>Краткое описание</TableHead>
-                        <TableHead>Тип задачи</TableHead>
-                        <TableHead>Модули</TableHead>
-                        <TableHead>Компоненты</TableHead>
-                        <TableHead>Сложность</TableHead>
-                        <TableHead>Статус задачи</TableHead>
-                        <TableHead>Документация</TableHead>
-                        <TableHead>Создано</TableHead>
-                        <TableHead>Изменено</TableHead>
-                        <TableHead className="text-right">Действия</TableHead>
+                        <TableHead className="w-8 px-2">№</TableHead>
+                        <TableHead className="w-14 px-2">Спринт</TableHead>
+                        <TableHead className="px-2">Статус спринта</TableHead>
+                        <TableHead className="px-2">Краткое описание</TableHead>
+                        <TableHead className="w-20 px-2">Тип</TableHead>
+                        <TableHead className="w-12 px-2">Сл.</TableHead>
+                        <TableHead className="px-2">Статус задачи</TableHead>
+                        <TableHead className="w-16 px-2 text-right"></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -2135,39 +2131,21 @@ export default function AdminPage() {
                             setPromptAboutExpandedEdit(false);
                           }}
                         >
-                          <TableCell>{b.order_num ?? idx + 1}</TableCell>
-                          <TableCell>{b.sprint_number}</TableCell>
-                          <TableCell>{b.sprint_status}</TableCell>
-                          <TableCell className="max-w-[200px] truncate" title={b.short_description}>
-                            {b.short_description.length > 50 ? `${b.short_description.slice(0, 50)}…` : b.short_description}
+                          <TableCell className="px-2 py-1">{b.order_num ?? idx + 1}</TableCell>
+                          <TableCell className="px-2 py-1">{b.sprint_number}</TableCell>
+                          <TableCell className="px-2 py-1 whitespace-nowrap">{b.sprint_status}</TableCell>
+                          <TableCell className="px-2 py-1 max-w-[280px] break-words" title={b.short_description}>
+                            {b.short_description}
                           </TableCell>
-                          <TableCell>{b.task_type ?? "—"}</TableCell>
-                          <TableCell className="max-w-[140px] truncate" title={b.modules ?? ""}>
-                            {b.modules ?? "—"}
-                          </TableCell>
-                          <TableCell className="max-w-[160px] truncate" title={b.components ?? ""}>
-                            {b.components ?? "—"}
-                          </TableCell>
-                          <TableCell>{b.complexity != null ? String(b.complexity) : "—"}</TableCell>
-                          <TableCell className="text-sm">{b.task_status}</TableCell>
-                          <TableCell className="max-w-[120px] truncate" title={b.doc_link ?? ""}>
-                            {b.doc_link ? (
-                              <a href={b.doc_link} target="_blank" rel="noopener noreferrer" className="text-primary text-xs">
-                                ссылка
-                              </a>
-                            ) : "—"}
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                            {b.created_at ? new Date(b.created_at).toLocaleString("ru-RU") : "—"}
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                            {b.status_changed_at ? new Date(b.status_changed_at).toLocaleString("ru-RU") : "—"}
-                          </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="px-2 py-1 whitespace-nowrap">{b.task_type ?? "—"}</TableCell>
+                          <TableCell className="px-2 py-1">{b.complexity != null ? String(b.complexity) : "—"}</TableCell>
+                          <TableCell className="px-2 py-1 whitespace-nowrap">{b.task_status}</TableCell>
+                          <TableCell className="px-2 py-1 text-right whitespace-nowrap">
                             <Button
-                              variant="outline"
-                              size="sm"
-                              className="mr-1"
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 mr-1"
+                              title="Изменить"
                               onClick={() => {
                                 setBacklogEditForm({ ...b });
                                 setBacklogEditId(b.id);
@@ -2175,14 +2153,16 @@ export default function AdminPage() {
                                 setPromptAboutExpandedEdit(false);
                               }}
                             >
-                              Изменить
+                              <Pencil className="h-3.5 w-3.5" />
                             </Button>
                             <Button
-                              variant="destructive"
-                              size="sm"
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-destructive hover:text-destructive"
+                              title="Удалить"
                               onClick={() => handleDeleteBacklog(b.id)}
                             >
-                              Удалить
+                              <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                           </TableCell>
                         </TableRow>
