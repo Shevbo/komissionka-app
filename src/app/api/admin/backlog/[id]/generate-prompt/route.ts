@@ -317,18 +317,36 @@ export async function POST(
   const components = componentsArr ? componentsArr.join(", ") : null;
 
   const now = new Date();
-  // «Об этом промпте» = преамбула и подвал из ответа агента (не передаются в Cursor/модель)
-  const promptAboutParts: string[] = [];
-  if (prefix.length > 0) promptAboutParts.push(prefix);
-  if (suffix.length > 0) promptAboutParts.push(suffix);
-  const prompt_about =
-    promptAboutParts.length > 0
-      ? promptAboutParts.join("\n\n")
-      : [
-          `Модель: ${selectedModel ?? "не указана"}`,
-          `Дата создания промпта: ${now.toISOString().slice(0, 19).replace("T", " ")}`,
-          `Объём: ${promptScope === "brief" ? "Кратко" : promptScope === "full" ? "Полная детализация" : "Стандарт"}`,
-        ].join("\n");
+  // «Об этом промпте»: исходная формулировка, символы/слова обмена, версии (не передаётся в Cursor/модель)
+  const promptAboutLines: string[] = [];
+  promptAboutLines.push(`Исходно задача звучала так: ${(row.short_description ?? "").trim() || "—"}`);
+  const symMatch = /Символов:\s*ввод\s*(\d+)\s*\/\s*вывод\s*(\d+)\s*\(слов:\s*(\d+)\s*\/\s*(\d+)\)/.exec(suffix);
+  if (symMatch) {
+    promptAboutLines.push(
+      `Символов было в обмене с моделью ИИ: ввод ${symMatch[1]} / вывод ${symMatch[2]} (слов: ${symMatch[3]} / ${symMatch[4]})`
+    );
+  }
+  const verAfterMatch = /после:\s*(app v[\d.]+,?\s*agent v[\d.]+,?\s*tgbot v[\d.]+)/i.exec(suffix);
+  const verSimpleMatch = /Версии:\s*(app v[\d.]+,?\s*agent v[\d.]+,?\s*tgbot v[\d.]+)/i.exec(suffix);
+  const verLine = verAfterMatch?.[1] ?? verSimpleMatch?.[1];
+  if (verLine) {
+    promptAboutLines.push(`Версии на момент генерации: ${verLine.trim()}`);
+  } else {
+    try {
+      const { readFileSync, existsSync } = await import("node:fs");
+      const { join } = await import("node:path");
+      const vPath = join(process.cwd(), "version.json");
+      if (existsSync(vPath)) {
+        const v = JSON.parse(readFileSync(vPath, "utf-8")) as { app?: string; agent?: string; tgbot?: string };
+        promptAboutLines.push(
+          `Версии на момент генерации: app v${v.app ?? "?"}, agent v${v.agent ?? "?"}, tgbot v${v.tgbot ?? "?"}`
+        );
+      }
+    } catch {
+      // ignore
+    }
+  }
+  const prompt_about = promptAboutLines.join("\n\n");
 
   const updated = await prisma.backlog.update({
     where: { id: row.id },

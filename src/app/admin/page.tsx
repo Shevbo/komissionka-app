@@ -204,6 +204,8 @@ export default function AdminPage() {
   const [backlogPromptModelEdit, setBacklogPromptModelEdit] = useState<string | null>(null);
   const [backlogPromptScopeNew, setBacklogPromptScopeNew] = useState<"brief" | "standard" | "full">("standard");
   const [backlogPromptScopeEdit, setBacklogPromptScopeEdit] = useState<"brief" | "standard" | "full">("standard");
+  const [promptAboutExpandedNew, setPromptAboutExpandedNew] = useState(false);
+  const [promptAboutExpandedEdit, setPromptAboutExpandedEdit] = useState(false);
 
   // Комиссионка AI chat: сессии в IndexedDB (до 4ГБ) или localStorage, до ручного удаления
   type ChatMessageRow = { role: "user" | "assistant"; content: string; timestamp?: number };
@@ -927,23 +929,23 @@ export default function AdminPage() {
       if (!parsed.prompt_markdown || typeof parsed.prompt_markdown !== "string") {
         throw new Error("В JSON нет поля prompt_markdown.");
       }
-      const now = new Date();
-      const modelLabelForPrompt =
-        backlogPromptModelNew ??
-        selectedAgentModel ??
-        "из настроек (site_settings агентской модели)";
-      const scopeLabel =
-        backlogPromptScopeNew === "brief"
-          ? "Кратко"
-          : backlogPromptScopeNew === "full"
-            ? "Полная детализация"
-            : "Стандарт";
-      const promptAboutLines = [
-        `Модель: ${modelLabelForPrompt}`,
-        `Дата создания промпта: ${now.toISOString().slice(0, 19).replace("T", " ")}`,
-        `Объём: ${scopeLabel}`,
-      ];
-      const prompt_about = promptAboutLines.join("\n");
+      const promptAboutLines: string[] = [];
+      promptAboutLines.push(
+        `Исходно задача звучала так: ${(backlogForm.short_description ?? "").trim() || "—"}`
+      );
+      const symMatch = /Символов:\s*ввод\s*(\d+)\s*\/\s*вывод\s*(\d+)\s*\(слов:\s*(\d+)\s*\/\s*(\d+)\)/.exec(rawResult);
+      if (symMatch) {
+        promptAboutLines.push(
+          `Символов было в обмене с моделью ИИ: ввод ${symMatch[1]} / вывод ${symMatch[2]} (слов: ${symMatch[3]} / ${symMatch[4]})`
+        );
+      }
+      const verAfterMatch = /после:\s*(app v[\d.]+,?\s*agent v[\d.]+,?\s*tgbot v[\d.]+)/i.exec(rawResult);
+      const verSimpleMatch = /Версии:\s*(app v[\d.]+,?\s*agent v[\d.]+,?\s*tgbot v[\d.]+)/i.exec(rawResult);
+      const verLine = verAfterMatch?.[1] ?? verSimpleMatch?.[1];
+      if (verLine) {
+        promptAboutLines.push(`Версии на момент генерации: ${verLine.trim()}`);
+      }
+      const prompt_about = promptAboutLines.join("\n\n");
 
       setBacklogForm((f) => ({
         ...f,
@@ -1932,8 +1934,27 @@ export default function AdminPage() {
                 {backlogForm.prompt_about && (
                   <div>
                     <Label>Об этом промпте</Label>
-                    <div className="rounded border bg-muted/50 p-2 text-xs text-muted-foreground whitespace-pre-wrap">
-                      {backlogForm.prompt_about}
+                    <div className="rounded border bg-muted/50 overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => setPromptAboutExpandedNew((v) => !v)}
+                        className="w-full flex items-center gap-1 p-2 text-left text-xs text-muted-foreground hover:bg-muted/70 transition-colors"
+                      >
+                        <span className={cn("inline-block transition-transform", promptAboutExpandedNew && "rotate-180")}>
+                          ▼
+                        </span>
+                        <span className="truncate flex-1 min-w-0">
+                          {promptAboutExpandedNew ? "Свернуть" : (backlogForm.prompt_about ?? "").split("\n")[0]}
+                        </span>
+                      </button>
+                      <div
+                        className={cn(
+                          "overflow-y-auto whitespace-pre-wrap p-2 pt-0 text-xs text-muted-foreground border-t border-border/50",
+                          promptAboutExpandedNew ? "max-h-[15em] leading-normal" : "max-h-0 overflow-hidden border-t-0 p-0"
+                        )}
+                      >
+                        {backlogForm.prompt_about}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -2064,6 +2085,7 @@ export default function AdminPage() {
                                 setBacklogEditForm({ ...b });
                                 setBacklogEditId(b.id);
                                 setBacklogPromptModelEdit(b.prompt_model ?? selectedAgentModel ?? null);
+                                setPromptAboutExpandedEdit(false);
                               }}
                             >
                               Изменить
@@ -2099,6 +2121,7 @@ export default function AdminPage() {
                     if (!open) {
                       setBacklogEditId(null);
                       setBacklogEditForm({});
+                      setPromptAboutExpandedEdit(false);
                     }
                   }}
                 >
@@ -2269,8 +2292,27 @@ export default function AdminPage() {
                       {(row.prompt_about ?? ef.prompt_about) && (
                         <div>
                           <Label>Об этом промпте</Label>
-                          <div className="rounded border bg-muted/50 p-2 text-xs text-muted-foreground whitespace-pre-wrap">
-                            {row.prompt_about ?? ef.prompt_about ?? ""}
+                          <div className="rounded border bg-muted/50 overflow-hidden">
+                            <button
+                              type="button"
+                              onClick={() => setPromptAboutExpandedEdit((v) => !v)}
+                              className="w-full flex items-center gap-1 p-2 text-left text-xs text-muted-foreground hover:bg-muted/70 transition-colors"
+                            >
+                              <span className={cn("inline-block transition-transform", promptAboutExpandedEdit && "rotate-180")}>
+                                ▼
+                              </span>
+                              <span className="truncate flex-1 min-w-0">
+                                {promptAboutExpandedEdit ? "Свернуть" : (row.prompt_about ?? ef.prompt_about ?? "").split("\n")[0]}
+                              </span>
+                            </button>
+                            <div
+                              className={cn(
+                                "overflow-y-auto whitespace-pre-wrap p-2 pt-0 text-xs text-muted-foreground border-t border-border/50",
+                                promptAboutExpandedEdit ? "max-h-[15em] leading-normal" : "max-h-0 overflow-hidden border-t-0 p-0"
+                              )}
+                            >
+                              {row.prompt_about ?? ef.prompt_about ?? ""}
+                            </div>
                           </div>
                         </div>
                       )}
