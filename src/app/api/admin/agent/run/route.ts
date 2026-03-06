@@ -102,6 +102,7 @@ export async function POST(req: Request) {
     chatName?: string;
     /** Входные изображения: data URL или объекты { mimeType, data }. */
     inputImages?: unknown;
+    disableCache?: boolean;
   };
   try {
     body = await req.json();
@@ -173,6 +174,7 @@ export async function POST(req: Request) {
     userAccount,
     chatName: typeof body.chatName === "string" ? body.chatName.trim() : undefined,
     environment: "admin",
+    ...(body.disableCache === true ? { disableCache: true } : {}),
     ...(Array.isArray((body as { inputImages?: unknown }).inputImages) &&
     (body as { inputImages?: unknown[] }).inputImages!.length
       ? { inputImages: (body as { inputImages?: unknown[] }).inputImages }

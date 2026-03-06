@@ -52,6 +52,8 @@ interface ParsedRequest {
    * data — base64 без data:-префикса.
    */
   inputImages?: Array<{ mimeType: string; data: string }>;
+  /** Отключить кэширование (agent_prompt_cache) для этого запроса. */
+  disableCache?: boolean;
 }
 
 function parseRequest(body: string): ParsedRequest | null {
@@ -118,6 +120,8 @@ function parseRequest(body: string): ParsedRequest | null {
           if (parsed.length > 0) inputImages = parsed;
         }
       }
+      const disableCache =
+        "disableCache" in data && (data as { disableCache?: unknown }).disableCache === true;
       return {
         prompt,
         history,
@@ -129,6 +133,7 @@ function parseRequest(body: string): ParsedRequest | null {
         chatName: chatName || undefined,
         environment: environment || undefined,
         inputImages,
+        disableCache,
       };
     }
   } catch {
@@ -243,6 +248,7 @@ async function handleRun(req: import("node:http").IncomingMessage, res: import("
           chatName: parsed.chatName,
           environment: parsed.environment,
           inputImages: parsed.inputImages,
+          disableCache: parsed.disableCache,
         });
         send("done", { result, logId: logId ?? null });
         console.log("[agent] runAgent done");

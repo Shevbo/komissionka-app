@@ -52,6 +52,8 @@ export interface AgentOptions {
    * data — base64 без data:-префикса.
    */
   inputImages?: Array<{ mimeType: string; data: string }>;
+  /** Отключить кэширование (agent_prompt_cache) для этого запроса. */
+  disableCache?: boolean;
 }
 
 export type { AgentStep } from "./core.js";
@@ -113,6 +115,7 @@ export async function runAgent(
   const stepsRef = { current: [] as AgentStep[] };
   const project = options?.project ?? config.defaultProject;
   const environment = options?.environment ?? "api";
+  const disableCache = options?.disableCache === true;
 
   const metadata: CacheMetadata = {
     project,
@@ -142,13 +145,14 @@ export async function runAgent(
       metadata.mode === "dev" &&
       (/^\d{4}$/.test(trimmedPrompt) || /^(?:код\s*:?\s*|подтвержд\w*\s*:?\s*)?\d{4}\s*$/i.test(trimmedPrompt));
     const forceFresh =
+      disableCache ||
       /^!/.test(trimmedPrompt) ||
       /\bforce\b/i.test(trimmedPrompt) ||
       isConfirmationCode ||
       (metadata.mode === "dev" && /^откат\s+\d{4}\s*$/i.test(trimmedPrompt));
     const promptForLlm = forceFresh ? trimmedPrompt.replace(/^!\s*/, "").trim() : trimmedPrompt;
 
-    if (!forceFresh && config.cacheSimilarityThreshold > 0) {
+    if (!forceFresh && !disableCache && config.cacheSimilarityThreshold > 0) {
       const similar = await findSimilar(promptForLlm, metadata, config.cacheSimilarityThreshold);
       if (similar.length > 0) {
         const top = similar[0]!;
@@ -205,16 +209,18 @@ export async function runAgent(
       }
     }
 
-    try {
-      const sysPromptLen = 0;
-      await saveToCache(metadata, promptForLlm, coreResult.result, {
-        wordsSent: countWords(promptForLlm) + sysPromptLen,
-        wordsReceived: countWords(coreResult.result),
-        systemPromptLen: sysPromptLen,
-      });
-      await trimCacheIfNeeded(config.cacheMaxBytes);
-    } catch {
-      // ignore cache errors
+    if (!disableCache) {
+      try {
+        const sysPromptLen = 0;
+        await saveToCache(metadata, promptForLlm, coreResult.result, {
+          wordsSent: countWords(promptForLlm) + sysPromptLen,
+          wordsReceived: countWords(coreResult.result),
+          systemPromptLen: sysPromptLen,
+        });
+        await trimCacheIfNeeded(config.cacheMaxBytes);
+      } catch {
+        // ignore cache errors
+      }
     }
 
     return {

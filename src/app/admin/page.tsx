@@ -883,6 +883,7 @@ export default function AdminPage() {
           project: "Комиссионка backlog",
           chatName: "backlog:new",
           environment: "admin",
+          disableCache: true,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -914,9 +915,17 @@ export default function AdminPage() {
       if (!parsed.prompt_markdown || typeof parsed.prompt_markdown !== "string") {
         throw new Error("В JSON нет поля prompt_markdown.");
       }
+      const now = new Date();
+      const prefaceLines = [
+        `> Модель: ${selectedAgentModel ?? "из .env"}`,
+        `> Дата создания промпта: ${now.toISOString().slice(0, 19).replace("T", " ")}`,
+        "",
+      ];
+      const finalPrompt = `${prefaceLines.join("\n")}${parsed.prompt_markdown!}`;
+
       setBacklogForm((f) => ({
         ...f,
-        description_prompt: parsed.prompt_markdown!,
+        description_prompt: finalPrompt,
       }));
       toast.success("Промпт для новой задачи сгенерирован моделью ИИ");
     } catch (err) {
@@ -1749,18 +1758,12 @@ export default function AdminPage() {
               <CardContent className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <Label>Порядковый № записи (опц.)</Label>
+                    <Label>№ тикета (авто)</Label>
                     <Input
                       type="number"
-                      min={1}
-                      value={backlogForm.order_num === "" ? "" : backlogForm.order_num}
-                      onChange={(e) =>
-                        setBacklogForm((f) => ({
-                          ...f,
-                          order_num: e.target.value === "" ? "" : parseInt(e.target.value, 10) || 0,
-                        }))
-                      }
-                      placeholder="авто"
+                      value={(backlog.length || 0) + 1}
+                      readOnly
+                      disabled
                       className="w-24"
                     />
                   </div>
@@ -1833,7 +1836,7 @@ export default function AdminPage() {
                     className="min-h-[280px] font-mono text-sm resize-y"
                   />
                 </div>
-                <div>
+                <div className="flex flex-wrap items-center gap-2">
                   <Button
                     type="button"
                     variant="outline"
@@ -1843,6 +1846,24 @@ export default function AdminPage() {
                   >
                     {backlogSaving ? "Генерация…" : "Сгенерировать промпт ИИ"}
                   </Button>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <div>
+                    <Label>Тип задачи</Label>
+                    <Input value="—" readOnly disabled />
+                  </div>
+                  <div>
+                    <Label>Модули</Label>
+                    <Input value="—" readOnly disabled />
+                  </div>
+                  <div>
+                    <Label>Компоненты</Label>
+                    <Input value="—" readOnly disabled />
+                  </div>
+                  <div>
+                    <Label>Сложность (1–5)</Label>
+                    <Input value="—" readOnly disabled />
+                  </div>
                 </div>
                 <div>
                   <Label>Ссылка на документацию после реализации</Label>
@@ -1883,6 +1904,10 @@ export default function AdminPage() {
                         <TableHead>Спринт</TableHead>
                         <TableHead>Статус спринта</TableHead>
                         <TableHead>Краткое описание</TableHead>
+                        <TableHead>Тип задачи</TableHead>
+                        <TableHead>Модули</TableHead>
+                        <TableHead>Компоненты</TableHead>
+                        <TableHead>Сложность</TableHead>
                         <TableHead>Статус задачи</TableHead>
                         <TableHead>Документация</TableHead>
                         <TableHead>Создано</TableHead>
@@ -1899,6 +1924,14 @@ export default function AdminPage() {
                           <TableCell className="max-w-[200px] truncate" title={b.short_description}>
                             {b.short_description}
                           </TableCell>
+                          <TableCell>{b.task_type ?? "—"}</TableCell>
+                          <TableCell className="max-w-[140px] truncate" title={b.modules ?? ""}>
+                            {b.modules ?? "—"}
+                          </TableCell>
+                          <TableCell className="max-w-[160px] truncate" title={b.components ?? ""}>
+                            {b.components ?? "—"}
+                          </TableCell>
+                          <TableCell>{b.complexity != null ? String(b.complexity) : "—"}</TableCell>
                           <TableCell>
                             <Select
                               value={b.task_status}
@@ -1985,15 +2018,12 @@ export default function AdminPage() {
                     <div className="space-y-4 pt-2">
                       <div className="grid gap-4 sm:grid-cols-2">
                         <div>
-                          <Label>Порядковый №</Label>
+                          <Label>№ тикета</Label>
                           <Input
                             type="number"
-                            value={ef.order_num ?? ""}
-                            onChange={(e) =>
-                              setEf({
-                                order_num: e.target.value === "" ? null : parseInt(e.target.value, 10) || 0,
-                              })
-                            }
+                            value={row.order_num ?? (backlog.findIndex((b) => b.id === row.id) + 1)}
+                            readOnly
+                            disabled
                             className="w-24"
                           />
                         </div>
@@ -2104,6 +2134,28 @@ export default function AdminPage() {
                           onChange={(e) => setEf({ test_order_or_link: e.target.value || null })}
                           className="min-h-[60px] resize-y"
                         />
+                      </div>
+                      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                        <div>
+                          <Label>Тип задачи</Label>
+                          <Input value={row.task_type ?? "—"} readOnly disabled />
+                        </div>
+                        <div>
+                          <Label>Модули</Label>
+                          <Input value={row.modules ?? "—"} readOnly disabled />
+                        </div>
+                        <div>
+                          <Label>Компоненты</Label>
+                          <Input value={row.components ?? "—"} readOnly disabled />
+                        </div>
+                        <div>
+                          <Label>Сложность (1–5)</Label>
+                          <Input
+                            value={row.complexity != null ? String(row.complexity) : "—"}
+                            readOnly
+                            disabled
+                          />
+                        </div>
                       </div>
                       <div className="flex gap-2">
                         <Button

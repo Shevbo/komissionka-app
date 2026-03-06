@@ -72,6 +72,9 @@ export async function POST(
     process.env.NEXTAUTH_URL?.replace(/\/$/, "") ||
     "http://127.0.0.1:3000";
 
+  const settings = await prisma.site_settings.findUnique({ where: { id: "main" } });
+  const selectedModel = settings?.agent_llm_model?.trim() || process.env.AGENT_LLM_MODEL || null;
+
   const short = row.short_description;
   const existing = row.description_prompt;
 
@@ -131,6 +134,7 @@ export async function POST(
     project: "Комиссионка backlog",
     chatName: `backlog:${row.id}`,
     environment: "admin",
+    disableCache: true,
   };
 
   const res = await fetch(`${appUrl}/api/admin/agent/run`, {
@@ -181,16 +185,24 @@ export async function POST(
   const modules = modulesArr ? modulesArr.join(", ") : null;
   const components = componentsArr ? componentsArr.join(", ") : null;
 
+  const now = new Date();
+  const prefaceLines = [
+    `> Модель: ${selectedModel ?? "не указана"}`,
+    `> Дата создания промпта: ${now.toISOString().slice(0, 19).replace("T", " ")}`,
+    "",
+  ];
+  const finalPrompt = `${prefaceLines.join("\n")}${promptMarkdown}`;
+
   const updated = await prisma.backlog.update({
     where: { id: row.id },
     data: {
-      description_prompt: promptMarkdown,
+      description_prompt: finalPrompt,
       task_type: parsed?.task_type ?? row.task_type,
       modules: modules ?? row.modules,
       components: components ?? row.components,
       complexity: parsed?.complexity ?? row.complexity,
-      prompt_model: process.env.AGENT_LLM_MODEL ?? null,
-      prompt_created_at: new Date(),
+      prompt_model: selectedModel,
+      prompt_created_at: now,
       prompt_duration_sec: durationSec,
       prompt_log_id: data.logId ?? row.prompt_log_id,
     },
