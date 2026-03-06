@@ -1,5 +1,9 @@
 param(
-    [string]$Branch = "main"
+    [string]$Branch = "main",
+    # Если true — деплой разрешён даже при неком чистом рабочем дереве (НЕ рекомендуется).
+    [switch]$AllowDirty = $false,
+    # Игнорируем изменения/неотслеживаемые файлы Cursor (.cursor/...), чтобы они не блокировали деплой.
+    [switch]$IgnoreCursor = $true
 )
 
 $HostAlias = "hoster"
@@ -12,15 +16,22 @@ try {
     Write-Host "[deploy-hoster-git] Project root: $ProjectRoot" -ForegroundColor Gray
 
     # 1) Проверка чистоты рабочего дерева
-    $status = git status --porcelain
+    $status = git status --porcelain --untracked-files=all
     if ($LASTEXITCODE -ne 0) {
         throw "git status failed"
     }
-    $statusText = if ($null -eq $status) { "" } else { $status.Trim() }
-    if ($statusText.Length -ne 0) {
-        Write-Host "Рабочее дерево не чистое. Закоммитьте или откатите изменения перед деплоем." -ForegroundColor Red
-        Write-Host $statusText -ForegroundColor Yellow
-        exit 1
+    $statusText = if ($null -eq $status) { "" } else { ($status -join "`n").Trim() }
+    if ($statusText.Length -ne 0 -and -not $AllowDirty) {
+        $lines = $statusText -split "`n" | ForEach-Object { $_.TrimEnd() } | Where-Object { $_ -ne "" }
+        if ($IgnoreCursor) {
+            $lines = $lines | Where-Object { $_ -notmatch "^\S{2}\s+\.cursor/" }
+        }
+        if ($lines.Count -gt 0) {
+            Write-Host "Рабочее дерево не чистое. Закоммитьте или откатите изменения перед деплоем." -ForegroundColor Red
+            Write-Host ($lines -join "`n") -ForegroundColor Yellow
+            exit 1
+        }
+        Write-Host "⚠️ Замечание: есть изменения только в .cursor/ (игнорируем и продолжаем деплой)." -ForegroundColor Yellow
     }
 
     # 2) Получаем текущий коммит
