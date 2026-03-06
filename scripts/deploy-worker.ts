@@ -4,11 +4,20 @@
  */
 
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
+import pg from "pg";
 import { exec } from "child_process";
 import { promisify } from "util";
 
 const execAsync = promisify(exec);
-const prisma = new PrismaClient();
+
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  throw new Error("DATABASE_URL is not set");
+}
+const pool = new pg.Pool({ connectionString, max: 5 });
+const adapter = new PrismaPg(pool);
+const prisma = new PrismaClient({ adapter });
 
 const POLL_INTERVAL_MS = 5000;
 const SCRIPTS_DIR = process.env.SCRIPTS_DIR ?? `${process.env.HOME}/komissionka/scripts`;
