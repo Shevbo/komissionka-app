@@ -41,7 +41,7 @@ import { getModeButtonLabel } from "komiss/lib/agent-mode-labels";
 import { AdminItemsTable } from "komiss/components/admin-items-table";
 import { ActivityOperationsDialog } from "komiss/components/ActivityOperationsDialog";
 import { AgentCacheBrowser } from "komiss/components/AgentCacheBrowser";
-import { MarkdownEditor } from "komiss/components/MarkdownEditor";
+import { WysiwygEditor } from "komiss/components/WysiwygEditor";
 
 type Item = {
   id: string;
@@ -1890,11 +1890,11 @@ export default function AdminPage() {
                   />
                 </div>
                 <div>
-                  <Label>Описание / промпт для ИИ (Markdown, заполняется админом, Cursor и моделью)</Label>
-                  <MarkdownEditor
+                  <Label>Описание / промпт для ИИ</Label>
+                  <WysiwygEditor
                     value={backlogForm.description_prompt}
                     onChange={(v) => setBacklogForm((f) => ({ ...f, description_prompt: v }))}
-                    placeholder="Подробное описание, промпт для ИИ, требования. **Жирный**, списки, код."
+                    placeholder="Подробное описание, промпт для ИИ, требования"
                     minHeight={280}
                   />
                 </div>
@@ -2285,10 +2285,10 @@ export default function AdminPage() {
                       </div>
                       <div>
                         <Label>Описание / промпт для ИИ</Label>
-                        <MarkdownEditor
+                        <WysiwygEditor
                           value={ef.description_prompt ?? ""}
                           onChange={(v) => setEf({ description_prompt: v })}
-                          placeholder="Промпт для ИИ в Markdown"
+                          placeholder="Промпт для ИИ"
                           minHeight={220}
                         />
                       </div>
