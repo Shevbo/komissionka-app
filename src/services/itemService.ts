@@ -1,9 +1,9 @@
 import { prisma } from "../lib/prisma";
 
-const LATEST_ITEMS_LIMIT = 10;
+const LATEST_ITEMS_LIMIT = 100;
 
 /**
- * Возвращает 10 последних добавленных товаров с данными продавца (profiles).
+ * Возвращает последние товары с данными продавца (profiles).
  * Один запрос с include (items → users → profiles).
  */
 export async function getLatestItems() {
