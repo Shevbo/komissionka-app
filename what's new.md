@@ -25,6 +25,16 @@
 
 ### ______***UPDATE***________
 
+**06.03.2026 >** Спринт 2, тикет №5: удобная навигация по таблице тикетов бэклога
+
+**2.1 В приложении Комиссионка (web)**  
+Реализована навигация по таблице бэклога (тикет №5). GET `/api/admin/backlog` с пагинацией (`_page`, `_limit`), сортировкой (`_sort`: order_num | short_description | created_at | task_status | id, `_order`: asc | desc) и фильтрами (`task_status`, `task_type`). В админке: панель сортировки/фильтров и кнопка «Обновить список»; под таблицей — пагинация «Страница N из M», кнопки «Предыдущая»/«Следующая». После сохранения и удаления тикета список обновляется через `fetchBacklog(backlogPage)`. В диалоге редактирования поле «Статус задачи» только для чтения (как в таблице). PATCH `/api/admin/backlog/[id]`: из UI принимаются только разрешённые поля (order_num, short_description, description_prompt, doc_link, test_order_or_link); sprint_number, task_status и др. — только от агента (заголовок X-Agent-API-Key). [src/app/api/admin/backlog/route.ts](src/app/api/admin/backlog/route.ts), [src/app/api/admin/backlog/[id]/route.ts](src/app/api/admin/backlog/[id]/route.ts), [src/app/admin/page.tsx](src/app/admin/page.tsx). app v1.11.0 → v1.12.0 (минор — тикет №5).
+
+**2.2–2.4**  
+Без изменений. agent v1.5.2, tgbot v1.1.0.
+
+---
+
 **06.03.2026 >** Спринт 2: сброс классификации при редактировании промпта, Markdown-редактор для описания тикета
 
 **2.1 В приложении Комиссионка (web)**  

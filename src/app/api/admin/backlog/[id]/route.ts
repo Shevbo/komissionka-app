@@ -49,6 +49,11 @@ async function syncBacklogToDocs(): Promise<void> {
   syncBacklogToDoc(list, process.cwd());
 }
 
+function isAgentRequest(request: Request): boolean {
+  const key = request.headers.get("x-agent-api-key");
+  return !!(key && process.env.AGENT_API_KEY && key === process.env.AGENT_API_KEY);
+}
+
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -68,6 +73,7 @@ export async function PATCH(
   if (!existing) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+  const fromAgent = isAgentRequest(request);
   const update: {
     order_num?: number | null;
     sprint_number?: number;
@@ -87,13 +93,25 @@ export async function PATCH(
   if (body.order_num !== undefined) {
     update.order_num = body.order_num == null ? null : Number(body.order_num);
   }
-  if (body.sprint_number !== undefined) {
-    const v = Number(body.sprint_number);
-    if (!Number.isNaN(v) && v >= 0) update.sprint_number = v;
-  }
-  if (body.sprint_status !== undefined) {
-    const s = String(body.sprint_status).trim();
-    if (SPRINT_STATUSES.includes(s as (typeof SPRINT_STATUSES)[number])) update.sprint_status = s;
+  if (fromAgent) {
+    if (body.sprint_number !== undefined) {
+      const v = Number(body.sprint_number);
+      if (!Number.isNaN(v) && v >= 0) update.sprint_number = v;
+    }
+    if (body.sprint_status !== undefined) {
+      const s = String(body.sprint_status).trim();
+      if (SPRINT_STATUSES.includes(s as (typeof SPRINT_STATUSES)[number])) update.sprint_status = s;
+    }
+    if (body.task_status !== undefined) {
+      const s = String(body.task_status).trim();
+      if (TASK_STATUSES.includes(s as (typeof TASK_STATUSES)[number])) {
+        update.task_status = s;
+        update.status_changed_at = new Date();
+      }
+    }
+    if (body.prompt_about !== undefined) {
+      update.prompt_about = body.prompt_about == null || body.prompt_about === "" ? null : String(body.prompt_about).trim();
+    }
   }
   if (body.short_description !== undefined) {
     const s = String(body.short_description).trim();
@@ -109,12 +127,18 @@ export async function PATCH(
       update.complexity = null;
     }
   }
-  if (body.task_status !== undefined) {
-    const s = String(body.task_status).trim();
-    if (TASK_STATUSES.includes(s as (typeof TASK_STATUSES)[number])) {
-      update.task_status = s;
-      update.status_changed_at = new Date();
-    }
+  if (fromAgent && body.task_type !== undefined) {
+    update.task_type = body.task_type == null || body.task_type === "" ? null : String(body.task_type).trim();
+  }
+  if (fromAgent && body.modules !== undefined) {
+    update.modules = body.modules == null || body.modules === "" ? null : String(body.modules).trim();
+  }
+  if (fromAgent && body.components !== undefined) {
+    update.components = body.components == null || body.components === "" ? null : String(body.components).trim();
+  }
+  if (fromAgent && body.complexity !== undefined) {
+    const c = body.complexity == null ? null : Number(body.complexity);
+    update.complexity = c != null && !Number.isNaN(c) ? c : null;
   }
   if (body.doc_link !== undefined) {
     update.doc_link = body.doc_link == null || body.doc_link === "" ? null : String(body.doc_link).trim();
@@ -124,9 +148,6 @@ export async function PATCH(
       body.test_order_or_link == null || body.test_order_or_link === ""
         ? null
         : String(body.test_order_or_link).trim();
-  }
-  if (body.prompt_about !== undefined) {
-    update.prompt_about = body.prompt_about == null || body.prompt_about === "" ? null : String(body.prompt_about).trim();
   }
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ ok: true });

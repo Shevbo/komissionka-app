@@ -207,6 +207,12 @@ export default function AdminPage() {
   const [backlogPromptScopeEdit, setBacklogPromptScopeEdit] = useState<"brief" | "standard" | "full">("standard");
   const [promptAboutExpandedNew, setPromptAboutExpandedNew] = useState(false);
   const [promptAboutExpandedEdit, setPromptAboutExpandedEdit] = useState(false);
+  const [backlogPage, setBacklogPage] = useState(1);
+  const [backlogTotal, setBacklogTotal] = useState(0);
+  const [backlogSort, setBacklogSort] = useState<"order_num" | "short_description" | "created_at" | "task_status">("order_num");
+  const [backlogOrder, setBacklogOrder] = useState<"asc" | "desc">("asc");
+  const [backlogFilterStatus, setBacklogFilterStatus] = useState<string>("");
+  const [backlogFilterType, setBacklogFilterType] = useState<string>("");
 
   // Комиссионка AI chat: сессии в IndexedDB (до 4ГБ) или localStorage, до ручного удаления
   type ChatMessageRow = { role: "user" | "assistant"; content: string; timestamp?: number };
@@ -467,7 +473,29 @@ export default function AdminPage() {
     setNews(data.news ?? []);
     setTestimonials(data.testimonials ?? []);
     setBacklog(data.backlog ?? []);
+    setBacklogTotal(data.backlog?.length ?? 0);
   }, []);
+
+  const fetchBacklog = useCallback(
+    async (page?: number) => {
+      const p = page ?? backlogPage;
+      const params = new URLSearchParams({
+        _page: String(p),
+        _limit: "100",
+        _sort: backlogSort,
+        _order: backlogOrder,
+      });
+      if (backlogFilterStatus) params.set("task_status", backlogFilterStatus);
+      if (backlogFilterType) params.set("task_type", backlogFilterType);
+      const res = await fetch(`/api/admin/backlog?${params}`, { credentials: "include" });
+      if (!res.ok) return;
+      const json = await res.json();
+      setBacklog(json.data ?? []);
+      setBacklogTotal(json.total ?? 0);
+      if (page !== undefined) setBacklogPage(page);
+    },
+    [backlogPage, backlogSort, backlogOrder, backlogFilterStatus, backlogFilterType]
+  );
 
   useEffect(() => {
     if (authLoading) return;
@@ -837,6 +865,7 @@ export default function AdminPage() {
         prompt_about: "",
       });
       await fetchAdminData();
+      await fetchBacklog(backlogPage);
       toast.success("Запись бэклога создана");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Не удалось создать");
@@ -973,6 +1002,7 @@ export default function AdminPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Ошибка");
       await fetchAdminData();
+      await fetchBacklog(backlogPage);
       setBacklogEditId(null);
       toast.success("Запись обновлена");
     } catch (err) {
@@ -987,7 +1017,7 @@ export default function AdminPage() {
     try {
       const res = await fetch(`/api/admin/backlog/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error();
-      setBacklog((prev) => prev.filter((b) => b.id !== id));
+      await fetchBacklog(backlogPage);
       toast.success("Запись удалена");
     } catch {
       toast.error("Не удалось удалить");
@@ -2012,6 +2042,53 @@ export default function AdminPage() {
                 <p className="text-sm text-muted-foreground">
                   Дубликат в docs/backlog.md обновляется при каждом изменении.
                 </p>
+                <div className="flex flex-wrap items-center gap-3 pt-2">
+                  <Select value={backlogSort} onValueChange={(v) => setBacklogSort(v as typeof backlogSort)}>
+                    <SelectTrigger className="w-[180px] h-8 text-xs">
+                      <SelectValue placeholder="Сортировка" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="order_num">По №</SelectItem>
+                      <SelectItem value="short_description">По описанию</SelectItem>
+                      <SelectItem value="created_at">По дате создания</SelectItem>
+                      <SelectItem value="task_status">По статусу задачи</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={backlogOrder} onValueChange={(v) => setBacklogOrder(v as "asc" | "desc")}>
+                    <SelectTrigger className="w-[100px] h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="asc">По возрастанию</SelectItem>
+                      <SelectItem value="desc">По убыванию</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={backlogFilterStatus} onValueChange={setBacklogFilterStatus}>
+                    <SelectTrigger className="w-[160px] h-8 text-xs">
+                      <SelectValue placeholder="Статус задачи" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Все</SelectItem>
+                      {BACKLOG_TASK_STATUSES.map((s) => (
+                        <SelectItem key={s} value={s}>{s}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={backlogFilterType} onValueChange={setBacklogFilterType}>
+                    <SelectTrigger className="w-[140px] h-8 text-xs">
+                      <SelectValue placeholder="Тип задачи" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Все</SelectItem>
+                      <SelectItem value="bug">bug</SelectItem>
+                      <SelectItem value="feature">feature</SelectItem>
+                      <SelectItem value="data_change">data_change</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button variant="secondary" size="sm" onClick={() => fetchBacklog(1)}>
+                    Обновить список
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent className="overflow-x-auto">
                 {backlog.length > 0 ? (
@@ -2035,12 +2112,21 @@ export default function AdminPage() {
                     </TableHeader>
                     <TableBody>
                       {backlog.map((b, idx) => (
-                        <TableRow key={b.id}>
+                        <TableRow
+                          key={b.id}
+                          className="cursor-pointer"
+                          onDoubleClick={() => {
+                            setBacklogEditForm({ ...b });
+                            setBacklogEditId(b.id);
+                            setBacklogPromptModelEdit(b.prompt_model ?? selectedAgentModel ?? null);
+                            setPromptAboutExpandedEdit(false);
+                          }}
+                        >
                           <TableCell>{b.order_num ?? idx + 1}</TableCell>
                           <TableCell>{b.sprint_number}</TableCell>
                           <TableCell>{b.sprint_status}</TableCell>
                           <TableCell className="max-w-[200px] truncate" title={b.short_description}>
-                            {b.short_description}
+                            {b.short_description.length > 50 ? `${b.short_description.slice(0, 50)}…` : b.short_description}
                           </TableCell>
                           <TableCell>{b.task_type ?? "—"}</TableCell>
                           <TableCell className="max-w-[140px] truncate" title={b.modules ?? ""}>
@@ -2050,26 +2136,7 @@ export default function AdminPage() {
                             {b.components ?? "—"}
                           </TableCell>
                           <TableCell>{b.complexity != null ? String(b.complexity) : "—"}</TableCell>
-                          <TableCell>
-                            <Select
-                              value={b.task_status}
-                              onValueChange={(v) =>
-                                handleUpdateBacklog(b.id, { task_status: v })
-                              }
-                              disabled={backlogSaving}
-                            >
-                              <SelectTrigger className="w-[130px] h-8">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {BACKLOG_TASK_STATUSES.map((s) => (
-                                  <SelectItem key={s} value={s}>
-                                    {s}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </TableCell>
+                          <TableCell className="text-sm">{b.task_status}</TableCell>
                           <TableCell className="max-w-[120px] truncate" title={b.doc_link ?? ""}>
                             {b.doc_link ? (
                               <a href={b.doc_link} target="_blank" rel="noopener noreferrer" className="text-primary text-xs">
@@ -2111,6 +2178,31 @@ export default function AdminPage() {
                   </Table>
                 ) : (
                   <p className="py-8 text-center text-muted-foreground">Нет записей в бэклоге</p>
+                )}
+                {backlogTotal > 0 && (
+                  <div className="flex items-center justify-between border-t px-4 py-2 text-sm text-muted-foreground">
+                    <span>
+                      Страница {backlogPage} из {Math.max(1, Math.ceil(backlogTotal / 100))}
+                    </span>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={backlogPage <= 1}
+                        onClick={() => fetchBacklog(backlogPage - 1)}
+                      >
+                        Предыдущая
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={backlogPage >= Math.ceil(backlogTotal / 100)}
+                        onClick={() => fetchBacklog(backlogPage + 1)}
+                      >
+                        Следующая
+                      </Button>
+                    </div>
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -2180,21 +2272,7 @@ export default function AdminPage() {
                         </div>
                         <div>
                           <Label>Статус задачи</Label>
-                          <Select
-                            value={ef.task_status ?? ""}
-                            onValueChange={(v) => setEf({ task_status: v })}
-                          >
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {BACKLOG_TASK_STATUSES.map((s) => (
-                                <SelectItem key={s} value={s}>
-                                  {s}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <Input value={ef.task_status ?? ""} readOnly className="bg-muted" />
                         </div>
                       </div>
                       <div>
