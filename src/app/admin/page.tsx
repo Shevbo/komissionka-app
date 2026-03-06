@@ -211,8 +211,8 @@ export default function AdminPage() {
   const [backlogTotal, setBacklogTotal] = useState(0);
   const [backlogSort, setBacklogSort] = useState<"order_num" | "short_description" | "created_at" | "task_status">("order_num");
   const [backlogOrder, setBacklogOrder] = useState<"asc" | "desc">("asc");
-  const [backlogFilterStatus, setBacklogFilterStatus] = useState<string>("");
-  const [backlogFilterType, setBacklogFilterType] = useState<string>("");
+  const [backlogFilterStatus, setBacklogFilterStatus] = useState<string>("__all__");
+  const [backlogFilterType, setBacklogFilterType] = useState<string>("__all__");
 
   // Комиссионка AI chat: сессии в IndexedDB (до 4ГБ) или localStorage, до ручного удаления
   type ChatMessageRow = { role: "user" | "assistant"; content: string; timestamp?: number };
@@ -485,8 +485,8 @@ export default function AdminPage() {
         _sort: backlogSort,
         _order: backlogOrder,
       });
-      if (backlogFilterStatus) params.set("task_status", backlogFilterStatus);
-      if (backlogFilterType) params.set("task_type", backlogFilterType);
+      if (backlogFilterStatus && backlogFilterStatus !== "__all__") params.set("task_status", backlogFilterStatus);
+      if (backlogFilterType && backlogFilterType !== "__all__") params.set("task_type", backlogFilterType);
       const res = await fetch(`/api/admin/backlog?${params}`, { credentials: "include" });
       if (!res.ok) return;
       const json = await res.json();
@@ -2068,7 +2068,7 @@ export default function AdminPage() {
                       <SelectValue placeholder="Статус задачи" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Все</SelectItem>
+                      <SelectItem value="__all__">Все</SelectItem>
                       {BACKLOG_TASK_STATUSES.map((s) => (
                         <SelectItem key={s} value={s}>{s}</SelectItem>
                       ))}
@@ -2079,7 +2079,7 @@ export default function AdminPage() {
                       <SelectValue placeholder="Тип задачи" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Все</SelectItem>
+                      <SelectItem value="__all__">Все</SelectItem>
                       <SelectItem value="bug">bug</SelectItem>
                       <SelectItem value="feature">feature</SelectItem>
                       <SelectItem value="data_change">data_change</SelectItem>
