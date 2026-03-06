@@ -3,6 +3,12 @@
  * Запускается как PM2 процесс, опрашивает очередь каждые 5 секунд
  */
 
+import * as dotenv from "dotenv";
+import * as path from "path";
+
+// Загружаем .env из корня проекта
+dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
+
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import pg from "pg";
