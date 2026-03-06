@@ -25,6 +25,26 @@
 
 ### ______***UPDATE***________
 
+**06.03.2026 >** Сервис деплоя для управления множественными средами (prod, test1, test2...)
+
+**2.1 В приложении Комиссионка (web)**  
+Реализован полноценный сервис деплоя:
+- **Модель данных Prisma**: 3 новые таблицы — `deploy_environments` (реестр сред), `deploy_queue` (очередь операций), `deploy_log` (журнал)
+- **API endpoints** (8 шт): `/api/deploy/environments`, `/api/deploy/queue`, `/api/deploy/log`, `/api/deploy/copy`, `/api/deploy/status`
+- **Bash-скрипты**: `env-create.sh`, `env-deploy.sh`, `env-copy.sh`, `env-delete.sh`, `env-status.sh`
+- **Worker**: `deploy-worker.ts` — фоновый процесс обработки очереди (добавлен в PM2)
+- **UI в админке**: новая вкладка «Деплой» с секциями Среды/Очередь/Журнал, диалоги создания/копирования сред
+- **PowerShell**: обновлён `deploy-hoster-git.ps1` — параметр `-Env` для деплоя в конкретную среду
+
+Новые файлы: `src/app/api/deploy/*`, `src/components/DeployTab.tsx`, `scripts/env-*.sh`, `scripts/deploy-worker.ts`.
+Добавлено ~2200 строк из 12322 строк core app (~18%).
+app v1.12.5 → v1.13.0 (минор — новая фича).
+
+**2.2–2.4**  
+Без изменений. agent v1.5.3, tgbot v1.1.0.
+
+---
+
 **06.03.2026 >** Исправление: «Duplicate function declaration found: backlog» при запросе к Gemini API в режиме консультации
 
 **2.1 В приложении Комиссионка (web)**  
