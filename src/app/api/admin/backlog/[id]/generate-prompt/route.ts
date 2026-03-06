@@ -160,39 +160,35 @@ export async function POST(
 
   const raw = (data.result ?? "").trim();
   const jsonMatch = /```json\s*([\s\S]*?)```/i.exec(raw) ?? /(\{[\s\S]*\})/.exec(raw);
-  if (!jsonMatch) {
-    return NextResponse.json(
-      { error: "Agent result did not contain JSON block as required." },
-      { status: 500 }
-    );
+  let parsed: GenerateResponse | null = null;
+  if (jsonMatch) {
+    try {
+      parsed = JSON.parse(jsonMatch[1]!) as GenerateResponse;
+    } catch {
+      // Игнорируем ошибку парсинга и используем fallback ниже.
+      parsed = null;
+    }
   }
-  let parsed: GenerateResponse;
-  try {
-    parsed = JSON.parse(jsonMatch[1]!) as GenerateResponse;
-  } catch (e) {
-    return NextResponse.json(
-      { error: "Failed to parse JSON from agent result: " + (e instanceof Error ? e.message : String(e)) },
-      { status: 500 }
-    );
-  }
-  if (!parsed.prompt_markdown || typeof parsed.prompt_markdown !== "string") {
-    return NextResponse.json(
-      { error: "Agent JSON missing prompt_markdown string field." },
-      { status: 500 }
-    );
-  }
+  const promptMarkdown =
+    parsed && typeof parsed.prompt_markdown === "string" && parsed.prompt_markdown.trim().length > 0
+      ? parsed.prompt_markdown
+      : raw.length > 0
+      ? raw
+      : row.description_prompt;
+  const modulesArr = parsed && Array.isArray(parsed.modules) ? parsed.modules : null;
+  const componentsArr = parsed && Array.isArray(parsed.components) ? parsed.components : null;
 
-  const modules = Array.isArray(parsed.modules) ? parsed.modules.join(", ") : null;
-  const components = Array.isArray(parsed.components) ? parsed.components.join(", ") : null;
+  const modules = modulesArr ? modulesArr.join(", ") : null;
+  const components = componentsArr ? componentsArr.join(", ") : null;
 
   const updated = await prisma.backlog.update({
     where: { id: row.id },
     data: {
       description_prompt: parsed.prompt_markdown,
-      task_type: parsed.task_type ?? row.task_type,
+      task_type: parsed?.task_type ?? row.task_type,
       modules: modules ?? row.modules,
       components: components ?? row.components,
-      complexity: parsed.complexity ?? row.complexity,
+      complexity: parsed?.complexity ?? row.complexity,
       prompt_model: process.env.AGENT_LLM_MODEL ?? null,
       prompt_created_at: new Date(),
       prompt_duration_sec: durationSec,
