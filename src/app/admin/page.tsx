@@ -118,6 +118,7 @@ type BacklogItem = {
   prompt_created_at?: string | null;
   prompt_duration_sec?: number | null;
   prompt_log_id?: string | null;
+  prompt_about?: string | null;
   doc_link: string | null;
   test_order_or_link: string | null;
   created_at: string | null;
@@ -194,12 +195,15 @@ export default function AdminPage() {
     task_status: "не начато",
     doc_link: "",
     test_order_or_link: "",
+    prompt_about: "",
   });
   const [backlogEditId, setBacklogEditId] = useState<string | null>(null);
   const [backlogEditForm, setBacklogEditForm] = useState<Partial<BacklogItem>>({});
   const [backlogSaving, setBacklogSaving] = useState(false);
   const [backlogPromptModelNew, setBacklogPromptModelNew] = useState<string | null>(null);
   const [backlogPromptModelEdit, setBacklogPromptModelEdit] = useState<string | null>(null);
+  const [backlogPromptScopeNew, setBacklogPromptScopeNew] = useState<"brief" | "standard" | "full">("standard");
+  const [backlogPromptScopeEdit, setBacklogPromptScopeEdit] = useState<"brief" | "standard" | "full">("standard");
 
   // Комиссионка AI chat: сессии в IndexedDB (до 4ГБ) или localStorage, до ручного удаления
   type ChatMessageRow = { role: "user" | "assistant"; content: string; timestamp?: number };
@@ -813,6 +817,7 @@ export default function AdminPage() {
           task_status: backlogForm.task_status,
           doc_link: backlogForm.doc_link.trim() || null,
           test_order_or_link: backlogForm.test_order_or_link.trim() || null,
+          prompt_about: backlogForm.prompt_about?.trim() || null,
         }),
       });
       const data = await res.json();
@@ -826,6 +831,7 @@ export default function AdminPage() {
         task_status: "не начато",
         doc_link: "",
         test_order_or_link: "",
+        prompt_about: "",
       });
       await fetchAdminData();
       toast.success("Запись бэклога создана");
@@ -844,33 +850,28 @@ export default function AdminPage() {
     setBacklogSaving(true);
     try {
       const shortDesc = backlogForm.short_description.trim();
+      const scopeInstruction =
+        backlogPromptScopeNew === "brief"
+          ? "Объём промпта: КРАТКО — только суть задачи, минимум текста."
+          : backlogPromptScopeNew === "full"
+            ? "Объём промпта: ПОЛНАЯ ДЕТАЛИЗАЦИЯ — максимально развёрнутый технический промпт."
+            : "Объём промпта: СТАНДАРТ — развёрнутый технический промпт с заголовками и списками.";
       const metaPromptLines = [
         "Ты — ведущий разработчик и архитектор проекта «Комиссионка» (Next.js, TypeScript, Prisma 7, PostgreSQL, NextAuth, Telegram-бот, отдельный агент к модели ИИ).",
-        "",
-        "ЕДИНСТВЕННЫЙ ИСТОЧНИК ЗАДАЧИ — краткое описание ниже. Игнорируй любой другой контекст, память или предыдущие сообщения.",
         "",
         "КРАТКОЕ ОПИСАНИЕ ЗАДАЧИ (short_description):",
         `«${shortDesc}»`,
         "",
-        "Текущее описание/промпт для ИИ (может быть пустым, можно использовать как черновик):",
+        "Текущее описание/промпт (черновик):",
         backlogForm.description_prompt ? backlogForm.description_prompt : "(пока пусто).",
         "",
-        "КРИТИЧНО — совпадение смыслов:",
-        "prompt_markdown должен раскрывать ТОЛЬКО и СТРОГО задачу из краткого описания выше. Запрещено подставлять другую задачу, брать формулировки из другого контекста или добавлять требования, которых нет в кратком описании. Смысл промпта и смысл краткого описания должны совпадать на 100%.",
+        scopeInstruction,
         "",
         "Твоя задача:",
-        "1) Сформировать полный, строгий, технический промпт для реализации ИМЕННО этой задачи (из краткого описания) профессиональным разработчиком соответствующего стека.",
-        "2) Присвоить задаче классификаторы:",
-        "   - task_type: один из значений [\"bug\", \"feature\", \"data_change\"].",
-        "   - modules: массив из подмножества [\"app\", \"agent\", \"tgbot\"].",
-        "   - components: массив строк (например, \"backend\", \"frontend\", \"prisma\", \"api\", \"docs\", \"deploy\" и т.п.).",
-        "   - complexity: целое число от 1 до 5 (1 — очень легко, 5 — очень сложно).",
+        "1) Сформировать технический промпт только про саму задачу (без инструкций по тестированию — тестирование в отдельном поле тикета «Тестирование / ссылка на сценарии»).",
+        "2) Присвоить классификаторы: task_type, modules, components, complexity.",
         "",
-        "Требования к промпту:",
-        "- раскрывать только задачу из краткого описания; без лишней воды;",
-        "- промпт строго технический, ориентирован на реализацию;",
-        "- используй Markdown с заголовками и списками;",
-        "- добавь указание, какие части можно выполнять поэтапно.",
+        "Требования к prompt_markdown: только про задачу; Markdown с заголовками и списками; без раздела «как тестировать».",
         "",
         "Формат ОТВЕТА (ОБЯЗАТЕЛЬНО, БЕЗ ДОПОЛНИТЕЛЬНОГО ТЕКСТА ВНЕ JSON):",
         "{",
@@ -931,16 +932,23 @@ export default function AdminPage() {
         backlogPromptModelNew ??
         selectedAgentModel ??
         "из настроек (site_settings агентской модели)";
-      const prefaceLines = [
-        `> Модель: ${modelLabelForPrompt}`,
-        `> Дата создания промпта: ${now.toISOString().slice(0, 19).replace("T", " ")}`,
-        "",
+      const scopeLabel =
+        backlogPromptScopeNew === "brief"
+          ? "Кратко"
+          : backlogPromptScopeNew === "full"
+            ? "Полная детализация"
+            : "Стандарт";
+      const promptAboutLines = [
+        `Модель: ${modelLabelForPrompt}`,
+        `Дата создания промпта: ${now.toISOString().slice(0, 19).replace("T", " ")}`,
+        `Объём: ${scopeLabel}`,
       ];
-      const finalPrompt = `${prefaceLines.join("\n")}${parsed.prompt_markdown!}`;
+      const prompt_about = promptAboutLines.join("\n");
 
       setBacklogForm((f) => ({
         ...f,
-        description_prompt: finalPrompt,
+        description_prompt: parsed.prompt_markdown!,
+        prompt_about,
       }));
       toast.success("Промпт для новой задачи сгенерирован моделью ИИ");
     } catch (err) {
@@ -990,6 +998,7 @@ export default function AdminPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model: backlogPromptModelEdit ?? null,
+          prompt_scope: backlogPromptScopeEdit,
         }),
       });
       const data = await res.json();
@@ -1856,6 +1865,19 @@ export default function AdminPage() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Select
+                    value={backlogPromptScopeNew}
+                    onValueChange={(v) => setBacklogPromptScopeNew(v as "brief" | "standard" | "full")}
+                  >
+                    <SelectTrigger className="h-8 w-[160px] text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="brief">Кратко</SelectItem>
+                      <SelectItem value="standard">Стандарт</SelectItem>
+                      <SelectItem value="full">Полная детализация</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select
                     value={backlogPromptModelNew ?? "__env__"}
                     onValueChange={(v) => {
                       const model = v === "__env__" ? null : v;
@@ -1907,6 +1929,14 @@ export default function AdminPage() {
                     {backlogSaving ? "Генерация…" : "Сгенерировать промпт ИИ"}
                   </Button>
                 </div>
+                {backlogForm.prompt_about && (
+                  <div>
+                    <Label>Об этом промпте</Label>
+                    <div className="rounded border bg-muted/50 p-2 text-xs text-muted-foreground whitespace-pre-wrap">
+                      {backlogForm.prompt_about}
+                    </div>
+                  </div>
+                )}
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   <div>
                     <Label>Тип задачи</Label>
@@ -2155,6 +2185,19 @@ export default function AdminPage() {
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         <Select
+                          value={backlogPromptScopeEdit}
+                          onValueChange={(v) => setBacklogPromptScopeEdit(v as "brief" | "standard" | "full")}
+                        >
+                          <SelectTrigger className="h-8 w-[160px] text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="brief">Кратко</SelectItem>
+                            <SelectItem value="standard">Стандарт</SelectItem>
+                            <SelectItem value="full">Полная детализация</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Select
                           value={backlogPromptModelEdit ?? "__env__"}
                           onValueChange={(v) => {
                             const model = v === "__env__" ? null : v;
@@ -2223,6 +2266,14 @@ export default function AdminPage() {
                           </span>
                         )}
                       </div>
+                      {(row.prompt_about ?? ef.prompt_about) && (
+                        <div>
+                          <Label>Об этом промпте</Label>
+                          <div className="rounded border bg-muted/50 p-2 text-xs text-muted-foreground whitespace-pre-wrap">
+                            {row.prompt_about ?? ef.prompt_about ?? ""}
+                          </div>
+                        </div>
+                      )}
                       <div>
                         <Label>Ссылка на документацию</Label>
                         <Input
@@ -2272,6 +2323,7 @@ export default function AdminPage() {
                               task_status: ef.task_status,
                               doc_link: ef.doc_link,
                               test_order_or_link: ef.test_order_or_link,
+                              prompt_about: ef.prompt_about ?? null,
                             })
                           }
                           disabled={backlogSaving}

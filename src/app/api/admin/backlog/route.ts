@@ -33,6 +33,7 @@ function parseBody(body: unknown): {
   complexity?: number | null;
   doc_link?: string | null;
   test_order_or_link?: string | null;
+  prompt_about?: string | null;
 } {
   const b = body as Record<string, unknown>;
   const sprint_number = typeof b?.sprint_number === "number" ? b.sprint_number : Number(b?.sprint_number);
@@ -55,6 +56,7 @@ function parseBody(body: unknown): {
   const order_num = b?.order_num != null ? (typeof b.order_num === "number" ? b.order_num : Number(b.order_num)) : null;
   const doc_link = typeof b?.doc_link === "string" ? b.doc_link.trim() || null : null;
   const test_order_or_link = typeof b?.test_order_or_link === "string" ? b.test_order_or_link.trim() || null : null;
+  const prompt_about = typeof b?.prompt_about === "string" ? b.prompt_about.trim() || null : null;
   return {
     order_num: Number.isNaN(order_num) ? null : order_num,
     sprint_number,
@@ -73,6 +75,7 @@ function parseBody(body: unknown): {
         : null,
     doc_link,
     test_order_or_link,
+    prompt_about,
   };
 }
 
@@ -96,6 +99,7 @@ async function syncBacklogToDocs(): Promise<void> {
      prompt_created_at: r.prompt_created_at?.toISOString() ?? null,
      prompt_duration_sec: r.prompt_duration_sec ?? null,
      prompt_log_id: r.prompt_log_id,
+    prompt_about: r.prompt_about ?? null,
     doc_link: r.doc_link,
     test_order_or_link: r.test_order_or_link,
     created_at: r.created_at?.toISOString() ?? null,
@@ -131,6 +135,7 @@ export async function POST(request: Request) {
         complexity: data.complexity ?? undefined,
         doc_link: data.doc_link ?? undefined,
         test_order_or_link: data.test_order_or_link ?? undefined,
+        prompt_about: data.prompt_about ?? undefined,
       },
     });
     await syncBacklogToDocs();

@@ -40,6 +40,7 @@ async function syncBacklogToDocs(): Promise<void> {
     prompt_created_at: r.prompt_created_at?.toISOString() ?? null,
     prompt_duration_sec: r.prompt_duration_sec ?? null,
     prompt_log_id: r.prompt_log_id,
+    prompt_about: r.prompt_about ?? null,
     doc_link: r.doc_link,
     test_order_or_link: r.test_order_or_link,
     created_at: r.created_at?.toISOString() ?? null,
@@ -76,6 +77,7 @@ export async function PATCH(
     task_status?: string;
     doc_link?: string | null;
     test_order_or_link?: string | null;
+    prompt_about?: string | null;
     status_changed_at?: Date;
   } = {};
   if (body.order_num !== undefined) {
@@ -111,6 +113,9 @@ export async function PATCH(
       body.test_order_or_link == null || body.test_order_or_link === ""
         ? null
         : String(body.test_order_or_link).trim();
+  }
+  if (body.prompt_about !== undefined) {
+    update.prompt_about = body.prompt_about == null || body.prompt_about === "" ? null : String(body.prompt_about).trim();
   }
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ ok: true });

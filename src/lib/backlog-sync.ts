@@ -21,6 +21,7 @@ export type BacklogRow = {
   prompt_created_at?: string | null;
   prompt_duration_sec?: number | null;
   prompt_log_id?: string | null;
+  prompt_about?: string | null;
   doc_link: string | null;
   test_order_or_link: string | null;
   created_at: string | null;

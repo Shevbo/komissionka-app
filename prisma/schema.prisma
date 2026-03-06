@@ -176,6 +176,8 @@ model backlog {
   prompt_created_at    DateTime? @db.Timestamptz(6)
   prompt_duration_sec  Int?     @db.Integer
   prompt_log_id        String?  @db.VarChar(128)
+  /** Преамбула и подвал о промпте (модель, дата и т.д.). Не передаётся в Cursor/ИИ при исполнении. */
+  prompt_about         String?  @db.Text
   doc_link             String?  @db.VarChar(1024)
   test_order_or_link   String?  @db.Text
   created_at           DateTime @default(now()) @db.Timestamptz(6)

@@ -63,10 +63,17 @@ export async function POST(
   const { id } = await params;
 
   let clientModel: string | null = null;
+  let promptScope: "brief" | "standard" | "full" = "standard";
   try {
-    const raw = (await request.json()) as { model?: unknown } | undefined;
+    const raw = (await request.json()) as { model?: unknown; prompt_scope?: unknown } | undefined;
     if (raw && typeof raw.model === "string" && raw.model.trim()) {
       clientModel = raw.model.trim();
+    }
+    if (raw && raw.prompt_scope !== undefined) {
+      const s = String(raw.prompt_scope).toLowerCase();
+      if (s === "brief" || s === "кратко") promptScope = "brief";
+      else if (s === "full" || s === "полная детализация" || s === "полная") promptScope = "full";
+      else promptScope = "standard";
     }
   } catch {
     // нет тела или некорректный JSON — игнорируем, используем значения по умолчанию
@@ -103,25 +110,29 @@ export async function POST(
 - complexity (сложность 1-5): ${row.complexity ?? "-"}`
       : "Классификаторы пока не заданы — определи их сам.";
 
+  const scopeInstruction =
+    promptScope === "brief"
+      ? "Объём промпта: КРАТКО — только суть задачи, минимум текста, без подразделов."
+      : promptScope === "full"
+        ? "Объём промпта: ПОЛНАЯ ДЕТАЛИЗАЦИЯ — максимально развёрнутый технический промпт с подразделами, примерами кода, списками файлов."
+        : "Объём промпта: СТАНДАРТ — развёрнутый технический промпт с заголовками и списками, без избыточной детализации.";
+
   const metaPrompt = [
     `[Запрос ${requestNonce}. Генерация промпта только для этого тикета.]`,
     "",
     "Ты — ведущий разработчик и архитектор проекта «Комиссионка» (Next.js, TypeScript, Prisma 7, PostgreSQL, NextAuth, Telegram-бот, отдельный агент к модели ИИ).",
     "",
-    "ЕДИНСТВЕННЫЙ ИСТОЧНИК ЗАДАЧИ — краткое описание ниже. Игнорируй любой другой контекст, память или предыдущие сообщения.",
-    "",
     "КРАТКОЕ ОПИСАНИЕ ЗАДАЧИ (short_description):",
     `«${short}»`,
     "",
     `id записи (только для лога): ${row.id}`,
-    "Текущее описание/промпт для ИИ (может быть пустым, можно использовать как черновик):",
+    "Текущее описание/промпт для ИИ (может быть пустым, черновик):",
     existing ? existing : "(пока пусто).",
     "",
-    "КРИТИЧНО — совпадение смыслов:",
-    "prompt_markdown должен раскрывать ТОЛЬКО и СТРОГО задачу из краткого описания выше. Запрещено подставлять другую задачу, брать формулировки из другого контекста или добавлять требования, которых нет в кратком описании. Смысл промпта и смысл краткого описания должны совпадать на 100%.",
+    scopeInstruction,
     "",
     "Твоя задача:",
-    "1) Сформировать полный, строгий, технический промпт для реализации ИМЕННО этой задачи (из краткого описания) профессиональным разработчиком соответствующего стека.",
+    "1) Сформировать технический промпт для реализации этой задачи (только описание задачи, без инструкций по тестированию — тестирование указывается в отдельном поле тикета «Тестирование / ссылка на сценарии»).",
     "2) Присвоить задаче классификаторы:",
     "   - task_type: один из значений [\"bug\", \"feature\", \"data_change\"].",
     "   - modules: массив из подмножества [\"app\", \"agent\", \"tgbot\"].",
@@ -130,11 +141,9 @@ export async function POST(
     "",
     classificationHint,
     "",
-    "Требования к промпту:",
-    "- раскрывать только задачу из краткого описания; без лишней воды;",
-    "- промпт строго технический, ориентирован на реализацию (какие файлы менять, какие сущности/эндпоинты трогать, как тестировать);",
-    "- используй Markdown с заголовками и списками;",
-    "- добавь упоминание, какие части задачи можно выполнять поэтапно.",
+    "Требования к prompt_markdown:",
+    "- только про саму задачу (что сделать, какие файлы/эндпоинты, как реализовать); без разделов «как тестировать»;",
+    "- Markdown с заголовками и списками; можно указать, какие части выполнять поэтапно.",
     "",
     "Формат ОТВЕТА (ОБЯЗАТЕЛЬНО, БЕЗ ДОПОЛНИТЕЛЬНОГО ТЕКСТА ВНЕ JSON):",
     "```json",
@@ -213,17 +222,18 @@ export async function POST(
   const components = componentsArr ? componentsArr.join(", ") : null;
 
   const now = new Date();
-  const prefaceLines = [
-    `> Модель: ${selectedModel ?? "не указана"}`,
-    `> Дата создания промпта: ${now.toISOString().slice(0, 19).replace("T", " ")}`,
-    "",
+  const promptAboutLines = [
+    `Модель: ${selectedModel ?? "не указана"}`,
+    `Дата создания промпта: ${now.toISOString().slice(0, 19).replace("T", " ")}`,
+    `Объём: ${promptScope === "brief" ? "Кратко" : promptScope === "full" ? "Полная детализация" : "Стандарт"}`,
   ];
-  const finalPrompt = `${prefaceLines.join("\n")}${promptMarkdown}`;
+  const prompt_about = promptAboutLines.join("\n");
 
   const updated = await prisma.backlog.update({
     where: { id: row.id },
     data: {
-      description_prompt: finalPrompt,
+      description_prompt: promptMarkdown,
+      prompt_about,
       task_type: parsed?.task_type ?? row.task_type,
       modules: modules ?? row.modules,
       components: components ?? row.components,
@@ -256,6 +266,7 @@ export async function POST(
         prompt_created_at: updated.prompt_created_at?.toISOString() ?? null,
         prompt_duration_sec: updated.prompt_duration_sec ?? null,
         prompt_log_id: updated.prompt_log_id,
+        prompt_about: updated.prompt_about,
         doc_link: updated.doc_link,
         test_order_or_link: updated.test_order_or_link,
         created_at: updated.created_at?.toISOString() ?? null,
