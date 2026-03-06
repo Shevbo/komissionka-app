@@ -110,6 +110,14 @@ type BacklogItem = {
   short_description: string;
   description_prompt: string;
   task_status: string;
+  task_type?: string | null;
+  modules?: string | null;
+  components?: string | null;
+  complexity?: number | null;
+  prompt_model?: string | null;
+  prompt_created_at?: string | null;
+  prompt_duration_sec?: number | null;
+  prompt_log_id?: string | null;
   doc_link: string | null;
   test_order_or_link: string | null;
   created_at: string | null;
