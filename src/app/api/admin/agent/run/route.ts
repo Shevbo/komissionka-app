@@ -100,6 +100,8 @@ export async function POST(req: Request) {
     mode?: string;
     project?: string;
     chatName?: string;
+    /** Переопределение модели ИИ для одного запроса (не сохраняется в БД). */
+    model?: string | null;
     /** Входные изображения: data URL или объекты { mimeType, data }. */
     inputImages?: unknown;
     disableCache?: boolean;
@@ -130,11 +132,24 @@ export async function POST(req: Request) {
   // и упростить диагностику ошибок.
   const useStream = stream && !isCodePrompt;
 
-  // Выбранная администратором модель (из БД)
+  // Выбранная модель:
+  // 1) приоритет — model из тела запроса (локальный override);
+  // 2) иначе — модель из site_settings.agent_llm_model;
+  // 3) если обе пусты — агент возьмёт свою модель по умолчанию из конфига.
   let modelOverride: { model: string; baseUrl?: string; apiKey?: string } | undefined;
   const settings = await prisma.site_settings.findUnique({ where: { id: "main" } });
-  const rawModel = settings?.agent_llm_model?.trim();
-  const selectedModel = rawModel ? (resolveLegacyModelId(rawModel) ?? rawModel) : undefined;
+  const rawModelFromSettings = settings?.agent_llm_model?.trim();
+  const rawModelFromBody =
+    typeof body.model === "string" && body.model.trim().length > 0
+      ? body.model.trim()
+      : undefined;
+  const normalizedFromBody = rawModelFromBody
+    ? resolveLegacyModelId(rawModelFromBody) ?? rawModelFromBody
+    : undefined;
+  const normalizedFromSettings = rawModelFromSettings
+    ? resolveLegacyModelId(rawModelFromSettings) ?? rawModelFromSettings
+    : undefined;
+  const selectedModel = normalizedFromBody ?? normalizedFromSettings;
   if (selectedModel) {
     const provider = isOpenRouterModel(selectedModel) ? "openrouter" : "google";
     // Для Google Gemini всегда используем официальный endpoint без учёта AGENT_LLM_BASE_URL,

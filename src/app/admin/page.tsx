@@ -198,6 +198,8 @@ export default function AdminPage() {
   const [backlogEditId, setBacklogEditId] = useState<string | null>(null);
   const [backlogEditForm, setBacklogEditForm] = useState<Partial<BacklogItem>>({});
   const [backlogSaving, setBacklogSaving] = useState(false);
+  const [backlogPromptModelNew, setBacklogPromptModelNew] = useState<string | null>(null);
+  const [backlogPromptModelEdit, setBacklogPromptModelEdit] = useState<string | null>(null);
 
   // Комиссионка AI chat: сессии в IndexedDB (до 4ГБ) или localStorage, до ручного удаления
   type ChatMessageRow = { role: "user" | "assistant"; content: string; timestamp?: number };
@@ -884,6 +886,7 @@ export default function AdminPage() {
           chatName: "backlog:new",
           environment: "admin",
           disableCache: true,
+          ...(backlogPromptModelNew ? { model: backlogPromptModelNew } : {}),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -916,8 +919,12 @@ export default function AdminPage() {
         throw new Error("В JSON нет поля prompt_markdown.");
       }
       const now = new Date();
+      const modelLabelForPrompt =
+        backlogPromptModelNew ??
+        selectedAgentModel ??
+        "из настроек (site_settings агентской модели)";
       const prefaceLines = [
-        `> Модель: ${selectedAgentModel ?? "из .env"}`,
+        `> Модель: ${modelLabelForPrompt}`,
         `> Дата создания промпта: ${now.toISOString().slice(0, 19).replace("T", " ")}`,
         "",
       ];
@@ -974,7 +981,7 @@ export default function AdminPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: selectedAgentModel ?? null,
+          model: backlogPromptModelEdit ?? null,
         }),
       });
       const data = await res.json();
@@ -1840,6 +1847,48 @@ export default function AdminPage() {
                   />
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
+                  <Select
+                    value={backlogPromptModelNew ?? "__env__"}
+                    onValueChange={(v) => {
+                      const model = v === "__env__" ? null : v;
+                      setBacklogPromptModelNew(model);
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-[220px] text-xs">
+                      <SelectValue placeholder="Модель для генерации" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__env__">Из настроек (site_settings)</SelectItem>
+                      {agentModels.map((m) => (
+                        <SelectItem
+                          key={m.id}
+                          value={m.id}
+                          disabled={m.provider === "openrouter" && !hasOpenRouterKey}
+                        >
+                          <span className="flex items-center gap-1.5">
+                            {m.typeIcon ? (
+                              <span
+                                aria-hidden
+                                title={
+                                  m.typeIcon === "🖼️"
+                                    ? "Генерация изображений"
+                                    : m.typeIcon === "📝"
+                                    ? "Текст"
+                                    : "Другое"
+                                }
+                              >
+                                {m.typeIcon}
+                              </span>
+                            ) : null}
+                            {m.name}
+                            {m.provider === "openrouter" && !hasOpenRouterKey
+                              ? " (добавьте AGENT_OPENROUTER_API_KEY)"
+                              : ""}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <Button
                     type="button"
                     variant="outline"
@@ -1976,6 +2025,7 @@ export default function AdminPage() {
                               onClick={() => {
                                 setBacklogEditForm({ ...b });
                                 setBacklogEditId(b.id);
+                                setBacklogPromptModelEdit(b.prompt_model ?? selectedAgentModel ?? null);
                               }}
                             >
                               Изменить
@@ -2095,34 +2145,76 @@ export default function AdminPage() {
                           className="min-h-[220px] font-mono text-sm resize-y"
                         />
                       </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={backlogSaving}
-                      onClick={() => handleGenerateBacklogPrompt(row.id)}
-                    >
-                      {backlogSaving ? "Генерация…" : "Сгенерировать промпт ИИ"}
-                    </Button>
-                    {row.prompt_log_id && (
-                      <a
-                        href={`/api/admin/agent/log?logId=${encodeURIComponent(row.prompt_log_id)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-primary hover:underline"
-                      >
-                        Лог рассуждений модели →
-                      </a>
-                    )}
-                    {row.prompt_model && row.prompt_created_at && (
-                      <span className="text-xs text-muted-foreground">
-                        Модель: {row.prompt_model},{" "}
-                        {new Date(row.prompt_created_at).toLocaleString("ru-RU")}
-                        {row.prompt_duration_sec != null ? ` (${row.prompt_duration_sec} с)` : null}
-                      </span>
-                    )}
-                  </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Select
+                          value={backlogPromptModelEdit ?? "__env__"}
+                          onValueChange={(v) => {
+                            const model = v === "__env__" ? null : v;
+                            setBacklogPromptModelEdit(model);
+                          }}
+                        >
+                          <SelectTrigger className="h-8 w-[220px] text-xs">
+                            <SelectValue placeholder="Модель для генерации" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__env__">Из настроек (site_settings)</SelectItem>
+                            {agentModels.map((m) => (
+                              <SelectItem
+                                key={m.id}
+                                value={m.id}
+                                disabled={m.provider === "openrouter" && !hasOpenRouterKey}
+                              >
+                                <span className="flex items-center gap-1.5">
+                                  {m.typeIcon ? (
+                                    <span
+                                      aria-hidden
+                                      title={
+                                        m.typeIcon === "🖼️"
+                                          ? "Генерация изображений"
+                                          : m.typeIcon === "📝"
+                                          ? "Текст"
+                                          : "Другое"
+                                      }
+                                    >
+                                      {m.typeIcon}
+                                    </span>
+                                  ) : null}
+                                  {m.name}
+                                  {m.provider === "openrouter" && !hasOpenRouterKey
+                                    ? " (добавьте AGENT_OPENROUTER_API_KEY)"
+                                    : ""}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={backlogSaving}
+                          onClick={() => handleGenerateBacklogPrompt(row.id)}
+                        >
+                          {backlogSaving ? "Генерация…" : "Сгенерировать промпт ИИ"}
+                        </Button>
+                        {row.prompt_log_id && (
+                          <a
+                            href={`/api/admin/agent/log?logId=${encodeURIComponent(row.prompt_log_id)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-primary hover:underline"
+                          >
+                            Лог рассуждений модели →
+                          </a>
+                        )}
+                        {row.prompt_model && row.prompt_created_at && (
+                          <span className="text-xs text-muted-foreground">
+                            Модель: {row.prompt_model},{" "}
+                            {new Date(row.prompt_created_at).toLocaleString("ru-RU")}
+                            {row.prompt_duration_sec != null ? ` (${row.prompt_duration_sec} с)` : null}
+                          </span>
+                        )}
+                      </div>
                       <div>
                         <Label>Ссылка на документацию</Label>
                         <Input
