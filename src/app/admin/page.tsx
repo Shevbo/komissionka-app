@@ -834,6 +834,98 @@ export default function AdminPage() {
     }
   }
 
+  async function handleGenerateBacklogPromptNew() {
+    if (!backlogForm.short_description.trim()) {
+      toast.error("Сначала введите краткое описание");
+      return;
+    }
+    setBacklogSaving(true);
+    try {
+      const metaPromptLines = [
+        "Ты — ведущий разработчик и архитектор проекта «Комиссионка» (Next.js, TypeScript, Prisma 7, PostgreSQL, NextAuth, Telegram-бот, отдельный агент к модели ИИ).",
+        "",
+        "Тебе даётся новая задача для бэклога (ещё не сохранена в БД):",
+        `- краткое описание (short_description): ${backlogForm.short_description}`,
+        "Текущее описание/промпт для ИИ (может быть пустым):",
+        backlogForm.description_prompt ? backlogForm.description_prompt : "(пока пусто).",
+        "",
+        "Твоя задача — на основе этой информации:",
+        "1) Сформировать полный, строгий, технический промпт для реализации задачи профессиональным разработчиком соответствующего стека.",
+        "2) Присвоить задаче классификаторы:",
+        "   - task_type: один из значений [\"bug\", \"feature\", \"data_change\"].",
+        "   - modules: массив из подмножества [\"app\", \"agent\", \"tgbot\"].",
+        "   - components: массив строк (например, \"backend\", \"frontend\", \"prisma\", \"api\", \"docs\", \"deploy\" и т.п.).",
+        "   - complexity: целое число от 1 до 5 (1 — очень легко, 5 — очень сложно).",
+        "",
+        "Требования к промпту:",
+        "- покрытие требований — максимально возможное (ориентир 100%), без лишней воды;",
+        "- промпт строго технический, ориентирован на реализацию;",
+        "- используй Markdown с заголовками и списками;",
+        "- добавь в тексте промпта указание, какие части задачи можно выполнять поэтапно.",
+        "",
+        "Формат ОТВЕТА (ОБЯЗАТЕЛЬНО, БЕЗ ДОПОЛНИТЕЛЬНОГО ТЕКСТА ВНЕ JSON):",
+        "{",
+        '  "task_type": "feature" | "bug" | "data_change",',
+        '  "modules": ["app", "agent"],',
+        '  "components": ["frontend", "api"],',
+        '  "complexity": 1 | 2 | 3 | 4 | 5,',
+        '  "prompt_markdown": "Здесь полный Markdown-промпт для разработчика по описанной задаче."',
+        "}",
+      ];
+      const metaPrompt = metaPromptLines.join("\n");
+      const res = await fetch("/api/admin/agent/run", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: metaPrompt,
+          mode: "dev",
+          project: "Комиссионка backlog",
+          chatName: "backlog:new",
+          environment: "admin",
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data) {
+        throw new Error(data.error || `Agent error: HTTP ${res.status}`);
+      }
+      const rawResult: string = typeof data.result === "string" ? data.result : "";
+      const jsonMatch =
+        /```json\s*([\s\S]*?)```/i.exec(rawResult) ?? /(\{[\s\S]*\})/.exec(rawResult);
+      if (!jsonMatch) {
+        throw new Error("Модель не вернула JSON-блок с prompt_markdown.");
+      }
+      let parsed: {
+        prompt_markdown?: string;
+        task_type?: string;
+        modules?: string[] | null;
+        components?: string[] | null;
+        complexity?: number | null;
+      };
+      try {
+        parsed = JSON.parse(jsonMatch[1] as string);
+      } catch (e) {
+        throw new Error(
+          `Не удалось распарсить JSON из ответа модели: ${
+            e instanceof Error ? e.message : String(e)
+          }`
+        );
+      }
+      if (!parsed.prompt_markdown || typeof parsed.prompt_markdown !== "string") {
+        throw new Error("В JSON нет поля prompt_markdown.");
+      }
+      setBacklogForm((f) => ({
+        ...f,
+        description_prompt: parsed.prompt_markdown!,
+      }));
+      toast.success("Промпт для новой задачи сгенерирован моделью ИИ");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Не удалось сгенерировать промпт");
+    } finally {
+      setBacklogSaving(false);
+    }
+  }
+
   async function handleUpdateBacklog(id: string, payload: Partial<BacklogItem>) {
     setBacklogSaving(true);
     try {
@@ -1740,6 +1832,17 @@ export default function AdminPage() {
                     placeholder="Подробное описание, промпт для ИИ, требования. Поддерживается Markdown: **жирный**, списки, код."
                     className="min-h-[280px] font-mono text-sm resize-y"
                   />
+                </div>
+                <div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={backlogSaving}
+                    onClick={handleGenerateBacklogPromptNew}
+                  >
+                    {backlogSaving ? "Генерация…" : "Сгенерировать промпт ИИ"}
+                  </Button>
                 </div>
                 <div>
                   <Label>Ссылка на документацию после реализации</Label>
