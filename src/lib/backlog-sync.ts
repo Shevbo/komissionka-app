@@ -13,6 +13,14 @@ export type BacklogRow = {
   short_description: string;
   description_prompt: string;
   task_status: string;
+  task_type?: string | null;
+  modules?: string | null;
+  components?: string | null;
+  complexity?: number | null;
+  prompt_model?: string | null;
+  prompt_created_at?: string | null;
+  prompt_duration_sec?: number | null;
+  prompt_log_id?: string | null;
   doc_link: string | null;
   test_order_or_link: string | null;
   created_at: string | null;
@@ -46,6 +54,10 @@ export function syncBacklogToDoc(rows: BacklogRow[], cwd: string | undefined): v
     "Статус спринта",
     "Краткое описание",
     "Описание/промпт для ИИ",
+    "Тип задачи",
+    "Модули",
+    "Компоненты",
+    "Сложность",
     "Статус задачи",
     "Документация",
     "Тестирование",
@@ -78,6 +90,10 @@ export function syncBacklogToDoc(rows: BacklogRow[], cwd: string | undefined): v
           r.sprint_status,
           escapeCell(r.short_description.slice(0, 80)) + (r.short_description.length > 80 ? "…" : ""),
           promptPreview,
+          r.task_type ?? "—",
+          r.modules ?? "—",
+          r.components ?? "—",
+          r.complexity != null ? String(r.complexity) : "—",
           r.task_status,
           r.doc_link ?? "—",
           testPreview,

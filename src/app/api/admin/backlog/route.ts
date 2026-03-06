@@ -27,6 +27,10 @@ function parseBody(body: unknown): {
   short_description: string;
   description_prompt: string;
   task_status: string;
+  task_type?: string | null;
+  modules?: string | null;
+  components?: string | null;
+  complexity?: number | null;
   doc_link?: string | null;
   test_order_or_link?: string | null;
 } {
@@ -58,6 +62,15 @@ function parseBody(body: unknown): {
     short_description,
     description_prompt,
     task_status,
+    task_type: typeof b?.task_type === "string" ? b.task_type.trim() || null : null,
+    modules: typeof b?.modules === "string" ? b.modules.trim() || null : null,
+    components: typeof b?.components === "string" ? b.components.trim() || null : null,
+    complexity:
+      typeof b?.complexity === "number"
+        ? b.complexity
+        : b?.complexity != null
+        ? Number(b.complexity)
+        : null,
     doc_link,
     test_order_or_link,
   };
@@ -75,6 +88,14 @@ async function syncBacklogToDocs(): Promise<void> {
     short_description: r.short_description,
     description_prompt: r.description_prompt,
     task_status: r.task_status,
+     task_type: r.task_type,
+     modules: r.modules,
+     components: r.components,
+     complexity: r.complexity,
+     prompt_model: r.prompt_model,
+     prompt_created_at: r.prompt_created_at?.toISOString() ?? null,
+     prompt_duration_sec: r.prompt_duration_sec ?? null,
+     prompt_log_id: r.prompt_log_id,
     doc_link: r.doc_link,
     test_order_or_link: r.test_order_or_link,
     created_at: r.created_at?.toISOString() ?? null,
@@ -104,6 +125,10 @@ export async function POST(request: Request) {
         short_description: data.short_description,
         description_prompt: data.description_prompt,
         task_status: data.task_status,
+        task_type: data.task_type ?? undefined,
+        modules: data.modules ?? undefined,
+        components: data.components ?? undefined,
+        complexity: data.complexity ?? undefined,
         doc_link: data.doc_link ?? undefined,
         test_order_or_link: data.test_order_or_link ?? undefined,
       },

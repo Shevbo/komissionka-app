@@ -858,6 +858,32 @@ export default function AdminPage() {
     }
   }
 
+  async function handleGenerateBacklogPrompt(id: string) {
+    setBacklogSaving(true);
+    try {
+      const res = await fetch(`/api/admin/backlog/${id}/generate-prompt`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "Ошибка генерации промпта");
+      }
+      const row = data.row as BacklogItem | undefined;
+      if (row) {
+        setBacklog((prev) => prev.map((b) => (b.id === row.id ? row : b)));
+        setBacklogEditForm((prev) => (prev.id === row.id ? { ...prev, ...row } : prev));
+      } else {
+        await fetchAdminData();
+      }
+      toast.success("Промпт для задачи сгенерирован моделью ИИ");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Не удалось сгенерировать промпт");
+    } finally {
+      setBacklogSaving(false);
+    }
+  }
+
   if (authLoading || (!authLoading && userRole !== "admin")) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-50">
@@ -1925,6 +1951,34 @@ export default function AdminPage() {
                           className="min-h-[220px] font-mono text-sm resize-y"
                         />
                       </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={backlogSaving}
+                      onClick={() => handleGenerateBacklogPrompt(row.id)}
+                    >
+                      {backlogSaving ? "Генерация…" : "Сгенерировать промпт ИИ"}
+                    </Button>
+                    {row.prompt_log_id && (
+                      <a
+                        href={`/api/admin/agent/log?logId=${encodeURIComponent(row.prompt_log_id)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-primary hover:underline"
+                      >
+                        Лог рассуждений модели →
+                      </a>
+                    )}
+                    {row.prompt_model && row.prompt_created_at && (
+                      <span className="text-xs text-muted-foreground">
+                        Модель: {row.prompt_model},{" "}
+                        {new Date(row.prompt_created_at).toLocaleString("ru-RU")}
+                        {row.prompt_duration_sec != null ? ` (${row.prompt_duration_sec} с)` : null}
+                      </span>
+                    )}
+                  </div>
                       <div>
                         <Label>Ссылка на документацию</Label>
                         <Input

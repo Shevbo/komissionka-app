@@ -167,6 +167,15 @@ model backlog {
   short_description    String   @db.VarChar(1024)
   description_prompt   String   @db.Text
   task_status          String   @db.VarChar(64)
+  // Классификаторы задачи и метаданные сгенерированного промпта
+  task_type            String?  @db.VarChar(32)
+  modules              String?  @db.VarChar(64)
+  components           String?  @db.VarChar(128)
+  complexity           Int?     @db.SmallInt
+  prompt_model         String?  @db.VarChar(255)
+  prompt_created_at    DateTime? @db.Timestamptz(6)
+  prompt_duration_sec  Int?     @db.Integer
+  prompt_log_id        String?  @db.VarChar(128)
   doc_link             String?  @db.VarChar(1024)
   test_order_or_link   String?  @db.Text
   created_at           DateTime @default(now()) @db.Timestamptz(6)
