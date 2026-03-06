@@ -41,6 +41,7 @@ import { getModeButtonLabel } from "komiss/lib/agent-mode-labels";
 import { AdminItemsTable } from "komiss/components/admin-items-table";
 import { ActivityOperationsDialog } from "komiss/components/ActivityOperationsDialog";
 import { AgentCacheBrowser } from "komiss/components/AgentCacheBrowser";
+import { MarkdownEditor } from "komiss/components/MarkdownEditor";
 
 type Item = {
   id: string;
@@ -930,9 +931,10 @@ export default function AdminPage() {
         throw new Error("В JSON нет поля prompt_markdown.");
       }
       const promptAboutLines: string[] = [];
-      promptAboutLines.push(
-        `Исходно задача звучала так: ${(backlogForm.short_description ?? "").trim() || "—"}`
-      );
+      const short = (backlogForm.short_description ?? "").trim() || "—";
+      const desc = (backlogForm.description_prompt ?? "").trim();
+      const originalPhrase = desc ? `${short}. ${desc}` : short;
+      promptAboutLines.push(`Исходно задача звучала так: ${originalPhrase}`);
       const symMatch = /Символов:\s*ввод\s*(\d+)\s*\/\s*вывод\s*(\d+)\s*\(слов:\s*(\d+)\s*\/\s*(\d+)\)/.exec(rawResult);
       if (symMatch) {
         promptAboutLines.push(
@@ -992,7 +994,7 @@ export default function AdminPage() {
     }
   }
 
-  async function handleGenerateBacklogPrompt(id: string) {
+  async function handleGenerateBacklogPrompt(id: string, descriptionBefore?: string | null) {
     setBacklogSaving(true);
     try {
       const res = await fetch(`/api/admin/backlog/${id}/generate-prompt`, {
@@ -1001,6 +1003,7 @@ export default function AdminPage() {
         body: JSON.stringify({
           model: backlogPromptModelEdit ?? null,
           prompt_scope: backlogPromptScopeEdit,
+          description_before_generation: descriptionBefore ?? undefined,
         }),
       });
       const data = await res.json();
@@ -1858,11 +1861,11 @@ export default function AdminPage() {
                 </div>
                 <div>
                   <Label>Описание / промпт для ИИ (Markdown, заполняется админом, Cursor и моделью)</Label>
-                  <Textarea
+                  <MarkdownEditor
                     value={backlogForm.description_prompt}
-                    onChange={(e) => setBacklogForm((f) => ({ ...f, description_prompt: e.target.value }))}
-                    placeholder="Подробное описание, промпт для ИИ, требования. Поддерживается Markdown: **жирный**, списки, код."
-                    className="min-h-[280px] font-mono text-sm resize-y"
+                    onChange={(v) => setBacklogForm((f) => ({ ...f, description_prompt: v }))}
+                    placeholder="Подробное описание, промпт для ИИ, требования. **Жирный**, списки, код."
+                    minHeight={280}
                   />
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -1935,22 +1938,26 @@ export default function AdminPage() {
                   <div>
                     <Label>Об этом промпте</Label>
                     <div className="rounded border bg-muted/50 overflow-hidden">
-                      <button
-                        type="button"
-                        onClick={() => setPromptAboutExpandedNew((v) => !v)}
-                        className="w-full flex items-center gap-1 p-2 text-left text-xs text-muted-foreground hover:bg-muted/70 transition-colors"
-                      >
-                        <span className={cn("inline-block transition-transform", promptAboutExpandedNew && "rotate-180")}>
+                      <div className="flex items-center h-9 min-h-[2.25rem] max-h-[2.25rem] px-2 border-b border-border/50">
+                        <span className="flex-1 min-w-0 truncate text-xs text-muted-foreground">
+                          Исходно задача звучала так: …
+                        </span>
+                        <button
+                          type="button"
+                          aria-label={promptAboutExpandedNew ? "Свернуть" : "Раскрыть"}
+                          onClick={() => setPromptAboutExpandedNew((v) => !v)}
+                          className={cn(
+                            "shrink-0 w-8 h-8 flex items-center justify-center text-muted-foreground hover:bg-muted/70 rounded transition-all",
+                            promptAboutExpandedNew && "rotate-180"
+                          )}
+                        >
                           ▼
-                        </span>
-                        <span className="truncate flex-1 min-w-0">
-                          {promptAboutExpandedNew ? "Свернуть" : (backlogForm.prompt_about ?? "").split("\n")[0]}
-                        </span>
-                      </button>
+                        </button>
+                      </div>
                       <div
                         className={cn(
-                          "overflow-y-auto whitespace-pre-wrap p-2 pt-0 text-xs text-muted-foreground border-t border-border/50",
-                          promptAboutExpandedNew ? "max-h-[15em] leading-normal" : "max-h-0 overflow-hidden border-t-0 p-0"
+                          "overflow-y-auto whitespace-pre-wrap text-xs text-muted-foreground",
+                          promptAboutExpandedNew ? "max-h-[15em] leading-normal p-2" : "max-h-0 overflow-hidden p-0"
                         )}
                       >
                         {backlogForm.prompt_about}
@@ -2200,10 +2207,11 @@ export default function AdminPage() {
                       </div>
                       <div>
                         <Label>Описание / промпт для ИИ</Label>
-                        <Textarea
+                        <MarkdownEditor
                           value={ef.description_prompt ?? ""}
-                          onChange={(e) => setEf({ description_prompt: e.target.value })}
-                          className="min-h-[220px] font-mono text-sm resize-y"
+                          onChange={(v) => setEf({ description_prompt: v })}
+                          placeholder="Промпт для ИИ в Markdown"
+                          minHeight={220}
                         />
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
@@ -2267,7 +2275,7 @@ export default function AdminPage() {
                           variant="outline"
                           size="sm"
                           disabled={backlogSaving}
-                          onClick={() => handleGenerateBacklogPrompt(row.id)}
+                          onClick={() => handleGenerateBacklogPrompt(row.id, ef.description_prompt ?? row.description_prompt)}
                         >
                           {backlogSaving ? "Генерация…" : "Сгенерировать промпт ИИ"}
                         </Button>
@@ -2293,22 +2301,26 @@ export default function AdminPage() {
                         <div>
                           <Label>Об этом промпте</Label>
                           <div className="rounded border bg-muted/50 overflow-hidden">
-                            <button
-                              type="button"
-                              onClick={() => setPromptAboutExpandedEdit((v) => !v)}
-                              className="w-full flex items-center gap-1 p-2 text-left text-xs text-muted-foreground hover:bg-muted/70 transition-colors"
-                            >
-                              <span className={cn("inline-block transition-transform", promptAboutExpandedEdit && "rotate-180")}>
+                            <div className="flex items-center h-9 min-h-[2.25rem] max-h-[2.25rem] px-2 border-b border-border/50">
+                              <span className="flex-1 min-w-0 truncate text-xs text-muted-foreground">
+                                Исходно задача звучала так: …
+                              </span>
+                              <button
+                                type="button"
+                                aria-label={promptAboutExpandedEdit ? "Свернуть" : "Раскрыть"}
+                                onClick={() => setPromptAboutExpandedEdit((v) => !v)}
+                                className={cn(
+                                  "shrink-0 w-8 h-8 flex items-center justify-center text-muted-foreground hover:bg-muted/70 rounded transition-all",
+                                  promptAboutExpandedEdit && "rotate-180"
+                                )}
+                              >
                                 ▼
-                              </span>
-                              <span className="truncate flex-1 min-w-0">
-                                {promptAboutExpandedEdit ? "Свернуть" : (row.prompt_about ?? ef.prompt_about ?? "").split("\n")[0]}
-                              </span>
-                            </button>
+                              </button>
+                            </div>
                             <div
                               className={cn(
-                                "overflow-y-auto whitespace-pre-wrap p-2 pt-0 text-xs text-muted-foreground border-t border-border/50",
-                                promptAboutExpandedEdit ? "max-h-[15em] leading-normal" : "max-h-0 overflow-hidden border-t-0 p-0"
+                                "overflow-y-auto whitespace-pre-wrap text-xs text-muted-foreground",
+                                promptAboutExpandedEdit ? "max-h-[15em] leading-normal p-2" : "max-h-0 overflow-hidden p-0"
                               )}
                             >
                               {row.prompt_about ?? ef.prompt_about ?? ""}

@@ -117,8 +117,13 @@ export async function POST(
 
   let clientModel: string | null = null;
   let promptScope: "brief" | "standard" | "full" = "standard";
+  let descriptionBeforeGeneration: string | null = null;
   try {
-    const raw = (await request.json()) as { model?: unknown; prompt_scope?: unknown } | undefined;
+    const raw = (await request.json()) as {
+      model?: unknown;
+      prompt_scope?: unknown;
+      description_before_generation?: unknown;
+    } | undefined;
     if (raw && typeof raw.model === "string" && raw.model.trim()) {
       clientModel = raw.model.trim();
     }
@@ -127,6 +132,9 @@ export async function POST(
       if (s === "brief" || s === "кратко") promptScope = "brief";
       else if (s === "full" || s === "полная детализация" || s === "полная") promptScope = "full";
       else promptScope = "standard";
+    }
+    if (raw && typeof raw.description_before_generation === "string") {
+      descriptionBeforeGeneration = raw.description_before_generation;
     }
   } catch {
     // нет тела или некорректный JSON — игнорируем, используем значения по умолчанию
@@ -317,9 +325,16 @@ export async function POST(
   const components = componentsArr ? componentsArr.join(", ") : null;
 
   const now = new Date();
-  // «Об этом промпте»: исходная формулировка, символы/слова обмена, версии (не передаётся в Cursor/модель)
+  // «Об этом промпте»: исходная формулировка (краткое + описание до генерации), символы/слова обмена, версии (не передаётся в Cursor/модель)
   const promptAboutLines: string[] = [];
-  promptAboutLines.push(`Исходно задача звучала так: ${(row.short_description ?? "").trim() || "—"}`);
+  const shortForAbout = (row.short_description ?? "").trim() || "—";
+  const desc =
+    (descriptionBeforeGeneration !== null
+      ? descriptionBeforeGeneration
+      : (row.description_prompt ?? "").trim()
+    ).trim();
+  const originalPhrase = desc ? `${shortForAbout}. ${desc}` : shortForAbout;
+  promptAboutLines.push(`Исходно задача звучала так: ${originalPhrase}`);
   const symMatch = /Символов:\s*ввод\s*(\d+)\s*\/\s*вывод\s*(\d+)\s*\(слов:\s*(\d+)\s*\/\s*(\d+)\)/.exec(suffix);
   if (symMatch) {
     promptAboutLines.push(

@@ -75,6 +75,10 @@ export async function PATCH(
     short_description?: string;
     description_prompt?: string;
     task_status?: string;
+    task_type?: string | null;
+    modules?: string | null;
+    components?: string | null;
+    complexity?: number | null;
     doc_link?: string | null;
     test_order_or_link?: string | null;
     prompt_about?: string | null;
@@ -96,7 +100,14 @@ export async function PATCH(
     if (s) update.short_description = s;
   }
   if (body.description_prompt !== undefined) {
-    update.description_prompt = String(body.description_prompt);
+    const newPrompt = String(body.description_prompt);
+    update.description_prompt = newPrompt;
+    if (existing.description_prompt !== newPrompt) {
+      update.task_type = null;
+      update.modules = null;
+      update.components = null;
+      update.complexity = null;
+    }
   }
   if (body.task_status !== undefined) {
     const s = String(body.task_status).trim();
