@@ -973,6 +973,9 @@ export default function AdminPage() {
       const res = await fetch(`/api/admin/backlog/${id}/generate-prompt`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: selectedAgentModel ?? null,
+        }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {

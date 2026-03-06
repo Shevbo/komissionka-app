@@ -61,6 +61,16 @@ export async function POST(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const { id } = await params;
+
+  let clientModel: string | null = null;
+  try {
+    const raw = (await request.json()) as { model?: unknown } | undefined;
+    if (raw && typeof raw.model === "string" && raw.model.trim()) {
+      clientModel = raw.model.trim();
+    }
+  } catch {
+    // нет тела или некорректный JSON — игнорируем, используем значения по умолчанию
+  }
   const row = await prisma.backlog.findUnique({ where: { id } });
   if (!row) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -73,7 +83,11 @@ export async function POST(
     "http://127.0.0.1:3000";
 
   const settings = await prisma.site_settings.findUnique({ where: { id: "main" } });
-  const selectedModel = settings?.agent_llm_model?.trim() || process.env.AGENT_LLM_MODEL || null;
+  const selectedModel =
+    clientModel?.trim() ||
+    settings?.agent_llm_model?.trim() ||
+    process.env.AGENT_LLM_MODEL ||
+    null;
 
   const short = row.short_description;
   const existing = row.description_prompt;
@@ -135,6 +149,7 @@ export async function POST(
     chatName: `backlog:${row.id}`,
     environment: "admin",
     disableCache: true,
+    ...(clientModel && clientModel.trim() ? { model: clientModel.trim() } : {}),
   };
 
   const res = await fetch(`${appUrl}/api/admin/agent/run`, {
