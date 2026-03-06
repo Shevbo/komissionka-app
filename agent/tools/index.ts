@@ -431,8 +431,7 @@ export const TOOLS_CHAT: ToolDefinition[] = [
   BACKLOG_TOOL,
 ];
 
-/** Чтение и поиск без write_file/run_command + backlog — режим «консультация». */
+/** Чтение и поиск без write_file/run_command — режим «консультация». BACKLOG_TOOL уже включён в TOOLS_FOR_LLM. */
 export const TOOLS_CONSULT: ToolDefinition[] = [
   ...TOOLS_FOR_LLM.filter((t) => !["write_file", "run_command"].includes(t.function.name)),
-  BACKLOG_TOOL,
 ];
