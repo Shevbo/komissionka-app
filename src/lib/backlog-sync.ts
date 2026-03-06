@@ -1,0 +1,79 @@
+/**
+ * Синхронизация таблицы backlog в docs/backlog.md для учёта (дубликат для администратора и ИИ).
+ */
+
+import { writeFileSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
+
+export type BacklogRow = {
+  id: string;
+  order_num: number | null;
+  sprint_number: number;
+  sprint_status: string;
+  short_description: string;
+  description_prompt: string;
+  task_status: string;
+  doc_link: string | null;
+  test_order_or_link: string | null;
+  created_at: string | null;
+  status_changed_at: string | null;
+};
+
+function escapeCell(s: string): string {
+  return s.replace(/\r/g, "").replace(/\n/g, " ").replace(/\|/g, "\\|");
+}
+
+/** Формирует Markdown-таблицу бэклога и записывает в docs/backlog.md */
+export function syncBacklogToDoc(rows: BacklogRow[], rootDir: string): void {
+  const header = [
+    "№",
+    "Спринт",
+    "Статус спринта",
+    "Краткое описание",
+    "Описание/промпт для ИИ",
+    "Статус задачи",
+    "Документация",
+    "Тестирование",
+    "Создано",
+    "Изменено",
+  ];
+  const lines: string[] = [
+    "# Бэклог",
+    "",
+    "Дубликат таблицы backlog в БД для учёта хотелок и статусов. Версия: " +
+      new Date().toISOString().slice(0, 19).replace("T", " "),
+    "",
+    "| " + header.join(" | ") + " |",
+    "| " + header.map(() => "---").join(" | ") + " |",
+  ];
+  rows.forEach((r, i) => {
+    const promptPreview =
+      r.description_prompt.length > 120
+        ? escapeCell(r.description_prompt.slice(0, 120) + "…")
+        : escapeCell(r.description_prompt);
+    const testPreview =
+      r.test_order_or_link && r.test_order_or_link.length > 80
+        ? escapeCell(r.test_order_or_link.slice(0, 80) + "…")
+        : (r.test_order_or_link ? escapeCell(r.test_order_or_link) : "—");
+    lines.push(
+      "| " +
+        [
+          r.order_num ?? i + 1,
+          r.sprint_number,
+          r.sprint_status,
+          escapeCell(r.short_description.slice(0, 80)) + (r.short_description.length > 80 ? "…" : ""),
+          promptPreview,
+          r.task_status,
+          r.doc_link ?? "—",
+          testPreview,
+          r.created_at ? r.created_at.slice(0, 19).replace("T", " ") : "—",
+          r.status_changed_at ? r.status_changed_at.slice(0, 19).replace("T", " ") : "—",
+        ].join(" | ") +
+        " |"
+    );
+  });
+  const content = lines.join("\n") + "\n";
+  const docsDir = join(rootDir, "docs");
+  mkdirSync(docsDir, { recursive: true });
+  writeFileSync(join(docsDir, "backlog.md"), content, "utf8");
+}

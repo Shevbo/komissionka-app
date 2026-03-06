@@ -157,3 +157,21 @@ model agent_prompt_cache {
   @@index([topic])
   @@index([created_at])
 }
+
+// Бэклог хотелок администратора и их статусы (дублируется в docs/backlog.md)
+model backlog {
+  id                   String   @id @default(uuid()) @db.Uuid
+  order_num            Int?     @db.Integer
+  sprint_number        Int      @db.Integer
+  sprint_status        String   @db.VarChar(64)
+  short_description    String   @db.VarChar(1024)
+  description_prompt   String   @db.Text
+  task_status          String   @db.VarChar(64)
+  doc_link             String?  @db.VarChar(1024)
+  test_order_or_link   String?  @db.Text
+  created_at           DateTime @default(now()) @db.Timestamptz(6)
+  status_changed_at    DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([sprint_number])
+  @@index([task_status])
+}

@@ -102,6 +102,23 @@ type Testimonial = {
   rating?: number | null;
 };
 
+type BacklogItem = {
+  id: string;
+  order_num: number | null;
+  sprint_number: number;
+  sprint_status: string;
+  short_description: string;
+  description_prompt: string;
+  task_status: string;
+  doc_link: string | null;
+  test_order_or_link: string | null;
+  created_at: string | null;
+  status_changed_at: string | null;
+};
+
+const BACKLOG_SPRINT_STATUSES = ["формируется", "выполняется", "реализован", "архив"] as const;
+const BACKLOG_TASK_STATUSES = ["не начато", "выполняется", "тестируется", "сделано", "отказ"] as const;
+
 export default function AdminPage() {
   const router = useRouter();
   const { user: currentUser, userRole, loading: authLoading, profile, refreshProfile } = useAuth();
@@ -157,6 +174,22 @@ export default function AdminPage() {
   // Testimonial form
   const [testimonialForm, setTestimonialForm] = useState({ author_name: "", text: "" });
   const [testimonialSaving, setTestimonialSaving] = useState(false);
+
+  // Backlog
+  const [backlog, setBacklog] = useState<BacklogItem[]>([]);
+  const [backlogForm, setBacklogForm] = useState({
+    order_num: "" as string | number,
+    sprint_number: 1,
+    sprint_status: "формируется",
+    short_description: "",
+    description_prompt: "",
+    task_status: "не начато",
+    doc_link: "",
+    test_order_or_link: "",
+  });
+  const [backlogEditId, setBacklogEditId] = useState<string | null>(null);
+  const [backlogEditForm, setBacklogEditForm] = useState<Partial<BacklogItem>>({});
+  const [backlogSaving, setBacklogSaving] = useState(false);
 
   // Комиссионка AI chat: сессии в IndexedDB (до 4ГБ) или localStorage, до ручного удаления
   type ChatMessageRow = { role: "user" | "assistant"; content: string; timestamp?: number };
@@ -416,6 +449,7 @@ export default function AdminPage() {
     }
     setNews(data.news ?? []);
     setTestimonials(data.testimonials ?? []);
+    setBacklog(data.backlog ?? []);
   }, []);
 
   useEffect(() => {
@@ -750,6 +784,80 @@ export default function AdminPage() {
     }
   }
 
+  async function handleCreateBacklog() {
+    if (!backlogForm.short_description.trim()) {
+      toast.error("Введите краткое описание");
+      return;
+    }
+    setBacklogSaving(true);
+    try {
+      const res = await fetch("/api/admin/backlog", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          order_num: backlogForm.order_num === "" ? null : Number(backlogForm.order_num),
+          sprint_number: backlogForm.sprint_number,
+          sprint_status: backlogForm.sprint_status,
+          short_description: backlogForm.short_description.trim(),
+          description_prompt: backlogForm.description_prompt,
+          task_status: backlogForm.task_status,
+          doc_link: backlogForm.doc_link.trim() || null,
+          test_order_or_link: backlogForm.test_order_or_link.trim() || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Ошибка");
+      setBacklogForm({
+        order_num: "",
+        sprint_number: 1,
+        sprint_status: "формируется",
+        short_description: "",
+        description_prompt: "",
+        task_status: "не начато",
+        doc_link: "",
+        test_order_or_link: "",
+      });
+      await fetchAdminData();
+      toast.success("Запись бэклога создана");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Не удалось создать");
+    } finally {
+      setBacklogSaving(false);
+    }
+  }
+
+  async function handleUpdateBacklog(id: string, payload: Partial<BacklogItem>) {
+    setBacklogSaving(true);
+    try {
+      const res = await fetch(`/api/admin/backlog/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Ошибка");
+      await fetchAdminData();
+      setBacklogEditId(null);
+      toast.success("Запись обновлена");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Не удалось обновить");
+    } finally {
+      setBacklogSaving(false);
+    }
+  }
+
+  async function handleDeleteBacklog(id: string) {
+    if (!window.confirm("Удалить запись из бэклога?")) return;
+    try {
+      const res = await fetch(`/api/admin/backlog/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      setBacklog((prev) => prev.filter((b) => b.id !== id));
+      toast.success("Запись удалена");
+    } catch {
+      toast.error("Не удалось удалить");
+    }
+  }
+
   if (authLoading || (!authLoading && userRole !== "admin")) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-50">
@@ -947,6 +1055,7 @@ export default function AdminPage() {
             <TabsTrigger value="content">Контент</TabsTrigger>
             <TabsTrigger value="news">Новости</TabsTrigger>
             <TabsTrigger value="testimonials">Отзывы</TabsTrigger>
+            <TabsTrigger value="backlog">Бэклог</TabsTrigger>
             <TabsTrigger value="ai">Комиссионка AI</TabsTrigger>
             <TabsTrigger value="cache">Кэш промптов</TabsTrigger>
           </TabsList>
@@ -1504,6 +1613,360 @@ export default function AdminPage() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="backlog" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <h2 className="text-lg font-semibold">Добавить запись в бэклог</h2>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <Label>Порядковый № записи (опц.)</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={backlogForm.order_num === "" ? "" : backlogForm.order_num}
+                      onChange={(e) =>
+                        setBacklogForm((f) => ({
+                          ...f,
+                          order_num: e.target.value === "" ? "" : parseInt(e.target.value, 10) || 0,
+                        }))
+                      }
+                      placeholder="авто"
+                      className="w-24"
+                    />
+                  </div>
+                  <div>
+                    <Label>№ спринта</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={backlogForm.sprint_number}
+                      onChange={(e) =>
+                        setBacklogForm((f) => ({ ...f, sprint_number: parseInt(e.target.value, 10) || 0 }))
+                      }
+                      className="w-24"
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <Label>Статус спринта</Label>
+                    <Select
+                      value={backlogForm.sprint_status}
+                      onValueChange={(v) => setBacklogForm((f) => ({ ...f, sprint_status: v }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {BACKLOG_SPRINT_STATUSES.map((s) => (
+                          <SelectItem key={s} value={s}>
+                            {s}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Статус задачи</Label>
+                    <Select
+                      value={backlogForm.task_status}
+                      onValueChange={(v) => setBacklogForm((f) => ({ ...f, task_status: v }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {BACKLOG_TASK_STATUSES.map((s) => (
+                          <SelectItem key={s} value={s}>
+                            {s}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div>
+                  <Label>Краткое описание</Label>
+                  <Input
+                    value={backlogForm.short_description}
+                    onChange={(e) => setBacklogForm((f) => ({ ...f, short_description: e.target.value }))}
+                    placeholder="Кратко о задаче"
+                    maxLength={1024}
+                  />
+                </div>
+                <div>
+                  <Label>Описание / промпт для ИИ (Markdown, заполняется админом, Cursor и моделью)</Label>
+                  <Textarea
+                    value={backlogForm.description_prompt}
+                    onChange={(e) => setBacklogForm((f) => ({ ...f, description_prompt: e.target.value }))}
+                    placeholder="Подробное описание, промпт для ИИ, требования. Поддерживается Markdown: **жирный**, списки, код."
+                    className="min-h-[280px] font-mono text-sm resize-y"
+                  />
+                </div>
+                <div>
+                  <Label>Ссылка на документацию после реализации</Label>
+                  <Input
+                    value={backlogForm.doc_link}
+                    onChange={(e) => setBacklogForm((f) => ({ ...f, doc_link: e.target.value }))}
+                    placeholder="URL или путь в docs/"
+                  />
+                </div>
+                <div>
+                  <Label>Порядок тестирования / ожидаемый результат или ссылка на сценарии в ./doc</Label>
+                  <Textarea
+                    value={backlogForm.test_order_or_link}
+                    onChange={(e) => setBacklogForm((f) => ({ ...f, test_order_or_link: e.target.value }))}
+                    placeholder="Кратко или ссылка на docs/..."
+                    className="min-h-[80px] resize-y"
+                  />
+                </div>
+                <Button onClick={handleCreateBacklog} disabled={backlogSaving}>
+                  {backlogSaving ? "Сохранение…" : "Добавить запись"}
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <h2 className="text-lg font-semibold">Таблица бэклога</h2>
+                <p className="text-sm text-muted-foreground">
+                  Дубликат в docs/backlog.md обновляется при каждом изменении.
+                </p>
+              </CardHeader>
+              <CardContent className="overflow-x-auto">
+                {backlog.length > 0 ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-10">№</TableHead>
+                        <TableHead>Спринт</TableHead>
+                        <TableHead>Статус спринта</TableHead>
+                        <TableHead>Краткое описание</TableHead>
+                        <TableHead>Статус задачи</TableHead>
+                        <TableHead>Документация</TableHead>
+                        <TableHead>Создано</TableHead>
+                        <TableHead>Изменено</TableHead>
+                        <TableHead className="text-right">Действия</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {backlog.map((b, idx) => (
+                        <TableRow key={b.id}>
+                          <TableCell>{b.order_num ?? idx + 1}</TableCell>
+                          <TableCell>{b.sprint_number}</TableCell>
+                          <TableCell>{b.sprint_status}</TableCell>
+                          <TableCell className="max-w-[200px] truncate" title={b.short_description}>
+                            {b.short_description}
+                          </TableCell>
+                          <TableCell>
+                            <Select
+                              value={b.task_status}
+                              onValueChange={(v) =>
+                                handleUpdateBacklog(b.id, { task_status: v })
+                              }
+                              disabled={backlogSaving}
+                            >
+                              <SelectTrigger className="w-[130px] h-8">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {BACKLOG_TASK_STATUSES.map((s) => (
+                                  <SelectItem key={s} value={s}>
+                                    {s}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell className="max-w-[120px] truncate" title={b.doc_link ?? ""}>
+                            {b.doc_link ? (
+                              <a href={b.doc_link} target="_blank" rel="noopener noreferrer" className="text-primary text-xs">
+                                ссылка
+                              </a>
+                            ) : "—"}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                            {b.created_at ? new Date(b.created_at).toLocaleString("ru-RU") : "—"}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                            {b.status_changed_at ? new Date(b.status_changed_at).toLocaleString("ru-RU") : "—"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="mr-1"
+                              onClick={() => {
+                                setBacklogEditForm({ ...b });
+                                setBacklogEditId(b.id);
+                              }}
+                            >
+                              Изменить
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleDeleteBacklog(b.id)}
+                            >
+                              Удалить
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <p className="py-8 text-center text-muted-foreground">Нет записей в бэклоге</p>
+                )}
+              </CardContent>
+            </Card>
+
+            {backlogEditId && (() => {
+              const row = backlog.find((b) => b.id === backlogEditId);
+              if (!row) return null;
+              const ef = backlogEditForm.id === row.id ? backlogEditForm : { ...row };
+              const setEf = (up: Partial<BacklogItem>) =>
+                setBacklogEditForm((prev) => (prev.id === row.id ? { ...prev, ...up } : { ...row, ...up }));
+              return (
+                <Dialog
+                  open={!!backlogEditId}
+                  onOpenChange={(open) => {
+                    if (!open) {
+                      setBacklogEditId(null);
+                      setBacklogEditForm({});
+                    }
+                  }}
+                >
+                  <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle>Редактировать запись бэклога</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 pt-2">
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div>
+                          <Label>Порядковый №</Label>
+                          <Input
+                            type="number"
+                            value={ef.order_num ?? ""}
+                            onChange={(e) =>
+                              setEf({
+                                order_num: e.target.value === "" ? null : parseInt(e.target.value, 10) || 0,
+                              })
+                            }
+                            className="w-24"
+                          />
+                        </div>
+                        <div>
+                          <Label>№ спринта</Label>
+                          <Input
+                            type="number"
+                            min={0}
+                            value={ef.sprint_number ?? ""}
+                            onChange={(e) => setEf({ sprint_number: parseInt(e.target.value, 10) || 0 })}
+                            className="w-24"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div>
+                          <Label>Статус спринта</Label>
+                          <Select
+                            value={ef.sprint_status ?? ""}
+                            onValueChange={(v) => setEf({ sprint_status: v })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {BACKLOG_SPRINT_STATUSES.map((s) => (
+                                <SelectItem key={s} value={s}>
+                                  {s}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label>Статус задачи</Label>
+                          <Select
+                            value={ef.task_status ?? ""}
+                            onValueChange={(v) => setEf({ task_status: v })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {BACKLOG_TASK_STATUSES.map((s) => (
+                                <SelectItem key={s} value={s}>
+                                  {s}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <div>
+                        <Label>Краткое описание</Label>
+                        <Input
+                          value={ef.short_description ?? ""}
+                          onChange={(e) => setEf({ short_description: e.target.value })}
+                          maxLength={1024}
+                        />
+                      </div>
+                      <div>
+                        <Label>Описание / промпт для ИИ</Label>
+                        <Textarea
+                          value={ef.description_prompt ?? ""}
+                          onChange={(e) => setEf({ description_prompt: e.target.value })}
+                          className="min-h-[220px] font-mono text-sm resize-y"
+                        />
+                      </div>
+                      <div>
+                        <Label>Ссылка на документацию</Label>
+                        <Input
+                          value={ef.doc_link ?? ""}
+                          onChange={(e) => setEf({ doc_link: e.target.value || null })}
+                        />
+                      </div>
+                      <div>
+                        <Label>Тестирование / ссылка на сценарии</Label>
+                        <Textarea
+                          value={ef.test_order_or_link ?? ""}
+                          onChange={(e) => setEf({ test_order_or_link: e.target.value || null })}
+                          className="min-h-[60px] resize-y"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={() =>
+                            handleUpdateBacklog(row.id, {
+                              order_num: ef.order_num,
+                              sprint_number: ef.sprint_number,
+                              sprint_status: ef.sprint_status,
+                              short_description: ef.short_description,
+                              description_prompt: ef.description_prompt,
+                              task_status: ef.task_status,
+                              doc_link: ef.doc_link,
+                              test_order_or_link: ef.test_order_or_link,
+                            })
+                          }
+                          disabled={backlogSaving}
+                        >
+                          {backlogSaving ? "Сохранение…" : "Сохранить"}
+                        </Button>
+                        <Button variant="outline" onClick={() => setBacklogEditId(null)}>
+                          Отмена
+                        </Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              );
+            })()}
           </TabsContent>
 
           <TabsContent value="ai" className="space-y-6 overflow-x-hidden">

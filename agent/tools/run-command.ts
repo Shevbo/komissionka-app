@@ -62,6 +62,7 @@ curl в любом виде к ${appUrl}/api/... (GET, POST, DELETE, с -H, -d �
   - curl -X POST ${appUrl}/api/admin/testimonials (создание отзывов с rating)
   - curl -X DELETE ${appUrl}/api/admin/news/<id> (удаление новости по id)
   - curl -X DELETE ${appUrl}/api/admin/testimonials/<id> (удаление отзыва по id)
+  - GET ${appUrl}/api/admin/data (в ответе есть backlog), POST ${appUrl}/api/admin/backlog (создание), PATCH ${appUrl}/api/admin/backlog/<id> (обновление), DELETE ${appUrl}/api/admin/backlog/<id> (удаление) — бэклог хотелок (дубликат в docs/backlog.md)
 npx tsx scripts/agent-backup.ts backup <path1> [path2 ...] — резервная копия файлов перед изменениями
 npx tsx scripts/agent-backup.ts restore <backupId> — восстановление из бэкапа
 npx tsx scripts/version-bump.ts <app|agent|tgbot> <major|minor|patch> — обновление версии компонента

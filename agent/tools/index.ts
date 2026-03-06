@@ -9,6 +9,12 @@ import { listDir } from "./list-dir.js";
 import { findFiles } from "./find-files.js";
 import { grep } from "./grep.js";
 import { runCommand, RUN_COMMAND_DISALLOWED_PREFIX, getAllowedCommandsReadable } from "./run-command.js";
+import {
+  backlogList,
+  backlogCreate,
+  backlogUpdate,
+  backlogDelete,
+} from "./backlog-api.js";
 
 export { readFile } from "./read-file.js";
 export type { ReadFileOutput } from "./read-file.js";
@@ -143,6 +149,59 @@ export function executeTool(
         `[get_agent_info]\nmodel: ${cfg.llmModel ?? "not set"}\nprovider: ${provider}`
       );
     }
+    case "backlog": {
+      const action = (args.action as string) ?? "list";
+      if (action === "list") {
+        return backlogList().then((r) =>
+          r.ok
+            ? `[backlog] ${r.message}\n${JSON.stringify(r.data, null, 2)}`
+            : `[backlog] error: ${r.message}`
+        );
+      }
+      if (action === "create") {
+        const body = args.body as Record<string, unknown> | undefined;
+        if (!body || typeof body.short_description !== "string" || !body.short_description.trim()) {
+          return Promise.resolve("[backlog] error: short_description обязателен для create");
+        }
+        return backlogCreate({
+          order_num: body.order_num != null ? Number(body.order_num) : null,
+          sprint_number: typeof body.sprint_number === "number" ? body.sprint_number : Number(body.sprint_number) || 1,
+          sprint_status: (body.sprint_status as string) ?? "формируется",
+          short_description: String(body.short_description).trim(),
+          description_prompt: typeof body.description_prompt === "string" ? body.description_prompt : "",
+          task_status: (body.task_status as string) ?? "не начато",
+          doc_link: body.doc_link != null && body.doc_link !== "" ? String(body.doc_link) : null,
+          test_order_or_link: body.test_order_or_link != null && body.test_order_or_link !== "" ? String(body.test_order_or_link) : null,
+        }).then((r) =>
+          r.ok ? `[backlog] ${r.message}` : `[backlog] error: ${r.message}`
+        );
+      }
+      if (action === "update") {
+        const id = args.id as string;
+        const body = args.body as Record<string, unknown> | undefined;
+        if (!id) return Promise.resolve("[backlog] error: id обязателен для update");
+        const payload: Record<string, unknown> = {};
+        if (body?.order_num !== undefined) payload.order_num = body.order_num;
+        if (body?.sprint_number !== undefined) payload.sprint_number = body.sprint_number;
+        if (body?.sprint_status !== undefined) payload.sprint_status = body.sprint_status;
+        if (body?.short_description !== undefined) payload.short_description = body.short_description;
+        if (body?.description_prompt !== undefined) payload.description_prompt = body.description_prompt;
+        if (body?.task_status !== undefined) payload.task_status = body.task_status;
+        if (body?.doc_link !== undefined) payload.doc_link = body.doc_link;
+        if (body?.test_order_or_link !== undefined) payload.test_order_or_link = body.test_order_or_link;
+        return backlogUpdate(id, payload).then((r) =>
+          r.ok ? `[backlog] ${r.message}` : `[backlog] error: ${r.message}`
+        );
+      }
+      if (action === "delete") {
+        const id = args.id as string;
+        if (!id) return Promise.resolve("[backlog] error: id обязателен для delete");
+        return backlogDelete(id).then((r) =>
+          r.ok ? `[backlog] ${r.message}` : `[backlog] error: ${r.message}`
+        );
+      }
+      return Promise.resolve("[backlog] error: action должен быть list | create | update | delete");
+    }
     default:
       return Promise.resolve(`[unknown tool] ${name}`);
   }
@@ -161,6 +220,29 @@ export interface ToolDefinition {
     };
   };
 }
+
+/** Бэклог: чтение и запись во всех режимах. Таблица backlog в БД, дубликат в docs/backlog.md. */
+const BACKLOG_TOOL: ToolDefinition = {
+  type: "function",
+  function: {
+    name: "backlog",
+    description:
+      "Читать и изменять бэклог хотелок (таблица backlog в БД, дубликат в docs/backlog.md). Доступно во всех режимах. action: list — список записей; create — новая запись (body: short_description обязательно, sprint_number, sprint_status, description_prompt, task_status и др.); update — обновить по id (body: поля для изменения); delete — удалить по id.",
+    parameters: {
+      type: "object",
+      properties: {
+        action: { type: "string", description: "list | create | update | delete" },
+        id: { type: "string", description: "id записи (для update и delete)" },
+        body: {
+          type: "object",
+          description:
+            "Для create: short_description (обяз.), sprint_number, sprint_status, description_prompt, task_status, doc_link, test_order_or_link, order_num. Для update: те же поля. Статусы спринта: формируется, выполняется, реализован, архив. Статусы задачи: не начато, выполняется, тестируется, сделано, отказ.",
+        },
+      },
+      required: ["action"],
+    },
+  },
+};
 
 export const TOOLS_FOR_LLM: ToolDefinition[] = [
   {
@@ -303,6 +385,7 @@ export const TOOLS_FOR_LLM: ToolDefinition[] = [
       },
     },
   },
+  BACKLOG_TOOL,
 ];
 
 /** write_file только для docs/ — для режима «курилка» (документация/инструкции). */
@@ -340,14 +423,16 @@ const READ_DOCS_FILE: ToolDefinition = {
   },
 };
 
-/** Режим «курилка»: get_agent_info + read_docs_file/write_docs_file (только docs). */
+/** Режим «курилка»: get_agent_info + read_docs_file/write_docs_file + backlog. */
 export const TOOLS_CHAT: ToolDefinition[] = [
   ...TOOLS_FOR_LLM.filter((t) => t.function.name === "get_agent_info"),
   READ_DOCS_FILE,
   WRITE_DOCS_FILE,
+  BACKLOG_TOOL,
 ];
 
-/** Чтение и поиск без записи и команд — режим «консультация». */
-export const TOOLS_CONSULT: ToolDefinition[] = TOOLS_FOR_LLM.filter(
-  (t) => !["write_file", "run_command"].includes(t.function.name)
-);
+/** Чтение и поиск без write_file/run_command + backlog — режим «консультация». */
+export const TOOLS_CONSULT: ToolDefinition[] = [
+  ...TOOLS_FOR_LLM.filter((t) => !["write_file", "run_command"].includes(t.function.name)),
+  BACKLOG_TOOL,
+];

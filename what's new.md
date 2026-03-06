@@ -25,6 +25,24 @@
 
 ### ______***UPDATE***________
 
+**06.03.2026 >** Ведение бэклога: закладка в админке, таблица backlog в БД, дубликат в docs/backlog.md, инструмент агента во всех режимах
+
+**2.1 В приложении Комиссионка (web)**  
+Добавлена закладка «Бэклог» в админке с таблицей записей (порядковый №, № спринта, статус спринта: формируется/выполняется/реализован/архив, краткое описание, описание/промпт для ИИ — большое поле с Markdown, статус задачи: не начато/выполняется/тестируется/сделано/отказ, ссылка на документацию, порядок тестирования или ссылка на сценарии, даты создания и изменения). Добавление, редактирование (диалог) и удаление записей. При любом изменении таблица синхронизируется в [docs/backlog.md](docs/backlog.md). Новые файлы: [prisma/migrations/20260306120000_add_backlog/migration.sql](prisma/migrations/20260306120000_add_backlog/migration.sql), [src/app/api/admin/backlog/route.ts](src/app/api/admin/backlog/route.ts), [src/app/api/admin/backlog/[id]/route.ts](src/app/api/admin/backlog/[id]/route.ts), [src/lib/backlog-sync.ts](src/lib/backlog-sync.ts); модель backlog в [prisma/schema.prisma](prisma/schema.prisma); GET [src/app/api/admin/data/route.ts](src/app/api/admin/data/route.ts) возвращает backlog; правки в [src/app/admin/page.tsx](src/app/admin/page.tsx). app v1.7.2 → v1.8.0 (минор — бэклог).
+
+**2.2 В сервисе Агент к модели ИИ**  
+Инструмент `backlog` (action: list | create | update | delete) для чтения и записи бэклога через API приложения; доступен во всех режимах (курилка, консультация, разработка). Новый модуль [agent/tools/backlog-api.ts](agent/tools/backlog-api.ts), правки в [agent/tools/index.ts](agent/tools/index.ts) (executeTool, BACKLOG_TOOL в TOOLS_FOR_LLM, TOOLS_CHAT, TOOLS_CONSULT), в [agent/tools/run-command.ts](agent/tools/run-command.ts) в список разрешённых curl добавлены эндпоинты backlog. agent v1.4.10 → v1.5.0 (минор).
+
+**2.3 В сервисе Телеграм-Бот**  
+Без изменений. tgbot v1.1.0.
+
+**2.4 PWA**  
+Без изменений.
+
+---
+
+### ______***UPDATE***________
+
 **05.03.2026 >** Ошибка агента: «tsx: not found» и падения при run_command; диагностика показала отсутствие node_modules/.bin в PATH дочернего процесса
 
 **2.1 В приложении Комиссионка (web)**  

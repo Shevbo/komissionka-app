@@ -27,6 +27,7 @@ export async function GET(request: Request) {
   const ADMIN_CART_LIMIT = 500;
   const ADMIN_NEWS_LIMIT = 100;
   const ADMIN_TESTIMONIALS_LIMIT = 100;
+  const ADMIN_BACKLOG_LIMIT = 500;
 
   const [
     itemsCount,
@@ -39,6 +40,7 @@ export async function GET(request: Request) {
     siteSettings,
     news,
     testimonials,
+    backlogRows,
   ] = await Promise.all([
     prisma.items.count(),
     prisma.messages.count(),
@@ -77,6 +79,10 @@ export async function GET(request: Request) {
       orderBy: { created_at: "desc" },
       take: ADMIN_TESTIMONIALS_LIMIT,
       select: { id: true, author_name: true, text: true, is_active: true, created_at: true, rating: true },
+    }),
+    prisma.backlog.findMany({
+      orderBy: [{ order_num: "asc" }, { created_at: "desc" }],
+      take: ADMIN_BACKLOG_LIMIT,
     }),
   ]);
 
@@ -156,7 +162,20 @@ export async function GET(request: Request) {
     testimonials: testimonials.map((t) => ({
       ...t,
       created_at: t.created_at?.toISOString() ?? null,
-      rating: t.rating, // Добавляем rating
+      rating: t.rating,
+    })),
+    backlog: backlogRows.map((b) => ({
+      id: b.id,
+      order_num: b.order_num,
+      sprint_number: b.sprint_number,
+      sprint_status: b.sprint_status,
+      short_description: b.short_description,
+      description_prompt: b.description_prompt,
+      task_status: b.task_status,
+      doc_link: b.doc_link,
+      test_order_or_link: b.test_order_or_link,
+      created_at: b.created_at?.toISOString() ?? null,
+      status_changed_at: b.status_changed_at?.toISOString() ?? null,
     })),
   });
 }
