@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "komiss/lib/auth";
 import { prisma } from "komiss/lib/prisma";
 import { syncBacklogToDoc, type BacklogRow } from "komiss/lib/backlog-sync";
+import type { Prisma } from "@prisma/client";
 
 async function isAdminRequest(request: Request): Promise<boolean> {
   const agentKey = request.headers.get("x-agent-api-key");
