@@ -201,20 +201,51 @@ export async function POST(
   const raw = (data.result ?? "").trim();
   const jsonMatch = /```json\s*([\s\S]*?)```/i.exec(raw) ?? /(\{[\s\S]*\})/.exec(raw);
   let parsed: GenerateResponse | null = null;
+  let prefix = "";
+  let suffix = "";
   if (jsonMatch) {
+    const fullMatch = jsonMatch[0];
+    const matchStart = raw.indexOf(fullMatch);
+    if (matchStart >= 0) {
+      prefix = raw.slice(0, matchStart).trim();
+      suffix = raw.slice(matchStart + fullMatch.length).trim();
+    }
     try {
       parsed = JSON.parse(jsonMatch[1]!) as GenerateResponse;
     } catch {
-      // Игнорируем ошибку парсинга и используем fallback ниже.
       parsed = null;
     }
+  } else {
+    // Нет JSON — пробуем вырезать подвал агента (--- Модель: ... Службы: ...)
+    const footerStart = raw.indexOf("\n\n---\nМодель:");
+    if (footerStart >= 0) {
+      suffix = raw.slice(footerStart).trim();
+      const middle = raw.slice(0, footerStart).trim();
+      // Преамбула — всё до первого значимого контента (например до ``` или до первой строки задачи)
+      const codeBlockStart = middle.search(/\n\s*```/);
+      if (codeBlockStart > 0) prefix = middle.slice(0, codeBlockStart).trim();
+      else if (middle.length > 0) prefix = middle.slice(0, Math.min(200, middle.length)).trim();
+    }
   }
-  const promptMarkdown =
-    parsed && typeof parsed.prompt_markdown === "string" && parsed.prompt_markdown.trim().length > 0
-      ? parsed.prompt_markdown
-      : raw.length > 0
-      ? raw
-      : row.description_prompt;
+
+  // В поле описания — только суть задачи: из JSON prompt_markdown или очищенный raw без преамбулы/подвала
+  let promptMarkdown: string;
+  if (parsed && typeof parsed.prompt_markdown === "string" && parsed.prompt_markdown.trim().length > 0) {
+    promptMarkdown = parsed.prompt_markdown.trim();
+  } else if (raw.length > 0 && jsonMatch) {
+    const fullMatch = jsonMatch[0];
+    const matchStart = raw.indexOf(fullMatch);
+    const afterJson = matchStart >= 0 ? raw.slice(matchStart + fullMatch.length).trim() : raw;
+    const withoutFooter = afterJson.includes("\n\n---\nМодель:") ? afterJson.slice(0, afterJson.indexOf("\n\n---\nМодель:")).trim() : afterJson;
+    promptMarkdown = withoutFooter.length > 0 ? withoutFooter : row.description_prompt ?? "";
+  } else if (raw.length > 0) {
+    const withoutFooter = raw.includes("\n\n---\nМодель:") ? raw.slice(0, raw.indexOf("\n\n---\nМодель:")).trim() : raw;
+    const withoutPrefix = prefix.length > 0 && withoutFooter.startsWith(prefix) ? withoutFooter.slice(prefix.length).trim() : withoutFooter;
+    promptMarkdown = withoutPrefix.length > 0 ? withoutPrefix : row.description_prompt ?? "";
+  } else {
+    promptMarkdown = row.description_prompt ?? "";
+  }
+
   const modulesArr = parsed && Array.isArray(parsed.modules) ? parsed.modules : null;
   const componentsArr = parsed && Array.isArray(parsed.components) ? parsed.components : null;
 
@@ -222,12 +253,18 @@ export async function POST(
   const components = componentsArr ? componentsArr.join(", ") : null;
 
   const now = new Date();
-  const promptAboutLines = [
-    `Модель: ${selectedModel ?? "не указана"}`,
-    `Дата создания промпта: ${now.toISOString().slice(0, 19).replace("T", " ")}`,
-    `Объём: ${promptScope === "brief" ? "Кратко" : promptScope === "full" ? "Полная детализация" : "Стандарт"}`,
-  ];
-  const prompt_about = promptAboutLines.join("\n");
+  // «Об этом промпте» = преамбула и подвал из ответа агента (не передаются в Cursor/модель)
+  const promptAboutParts: string[] = [];
+  if (prefix.length > 0) promptAboutParts.push(prefix);
+  if (suffix.length > 0) promptAboutParts.push(suffix);
+  const prompt_about =
+    promptAboutParts.length > 0
+      ? promptAboutParts.join("\n\n")
+      : [
+          `Модель: ${selectedModel ?? "не указана"}`,
+          `Дата создания промпта: ${now.toISOString().slice(0, 19).replace("T", " ")}`,
+          `Объём: ${promptScope === "brief" ? "Кратко" : promptScope === "full" ? "Полная детализация" : "Стандарт"}`,
+        ].join("\n");
 
   const updated = await prisma.backlog.update({
     where: { id: row.id },
