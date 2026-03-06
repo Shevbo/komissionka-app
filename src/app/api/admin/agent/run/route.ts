@@ -179,6 +179,9 @@ export async function POST(req: Request) {
   const modelDisplayName = selectedModel ? getModelById(selectedModel)?.name : undefined;
   const basePath = `/run${useStream ? "?stream=1" : ""}`;
   const userAccount = session?.user?.email ?? session?.user?.id ?? null;
+  const isBacklogRequest =
+    (typeof body.chatName === "string" && body.chatName.startsWith("backlog:")) ||
+    (typeof body.project === "string" && body.project.trim() === "Комиссионка backlog");
   const agentBody: Record<string, unknown> = {
     prompt,
     ...(history?.length ? { history } : {}),
@@ -189,7 +192,7 @@ export async function POST(req: Request) {
     userAccount,
     chatName: typeof body.chatName === "string" ? body.chatName.trim() : undefined,
     environment: "admin",
-    ...(body.disableCache === true ? { disableCache: true } : {}),
+    ...(body.disableCache === true || isBacklogRequest ? { disableCache: true } : {}),
     ...(Array.isArray((body as { inputImages?: unknown }).inputImages) &&
     (body as { inputImages?: unknown[] }).inputImages!.length
       ? { inputImages: (body as { inputImages?: unknown[] }).inputImages }

@@ -115,7 +115,11 @@ export async function runAgent(
   const stepsRef = { current: [] as AgentStep[] };
   const project = options?.project ?? config.defaultProject;
   const environment = options?.environment ?? "api";
-  const disableCache = options?.disableCache === true;
+  const isBacklogPrompt =
+    (typeof options?.chatName === "string" && options.chatName.startsWith("backlog:")) ||
+    (options?.project === "Комиссионка backlog");
+  const disableCache =
+    options?.disableCache === true || isBacklogPrompt;
 
   const metadata: CacheMetadata = {
     project,

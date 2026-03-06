@@ -92,6 +92,8 @@ export async function POST(
   const short = row.short_description;
   const existing = row.description_prompt;
 
+  const requestNonce = `${id}-${Date.now()}`;
+
   const classificationHint =
     row.task_type || row.modules || row.components || row.complexity
       ? `Текущие предполагаемые классификаторы (их можно скорректировать, если они неточны):
@@ -102,6 +104,8 @@ export async function POST(
       : "Классификаторы пока не заданы — определи их сам.";
 
   const metaPrompt = [
+    `[Запрос ${requestNonce}. Генерация промпта только для этого тикета.]`,
+    "",
     "Ты — ведущий разработчик и архитектор проекта «Комиссионка» (Next.js, TypeScript, Prisma 7, PostgreSQL, NextAuth, Telegram-бот, отдельный агент к модели ИИ).",
     "",
     "ЕДИНСТВЕННЫЙ ИСТОЧНИК ЗАДАЧИ — краткое описание ниже. Игнорируй любой другой контекст, память или предыдущие сообщения.",
@@ -161,6 +165,7 @@ export async function POST(
 
   const res = await fetch(`${appUrl}/api/admin/agent/run`, {
     method: "POST",
+    cache: "no-store",
     headers: {
       "Content-Type": "application/json",
       cookie: request.headers.get("cookie") ?? "",
@@ -232,29 +237,32 @@ export async function POST(
 
   await syncBacklogToDocs();
 
-  return NextResponse.json({
-    ok: true,
-    row: {
-      id: updated.id,
-      order_num: updated.order_num,
-      sprint_number: updated.sprint_number,
-      sprint_status: updated.sprint_status,
-      short_description: updated.short_description,
-      description_prompt: updated.description_prompt,
-      task_status: updated.task_status,
-      task_type: updated.task_type,
-      modules: updated.modules,
-      components: updated.components,
-      complexity: updated.complexity,
-      prompt_model: updated.prompt_model,
-      prompt_created_at: updated.prompt_created_at?.toISOString() ?? null,
-      prompt_duration_sec: updated.prompt_duration_sec ?? null,
-      prompt_log_id: updated.prompt_log_id,
-      doc_link: updated.doc_link,
-      test_order_or_link: updated.test_order_or_link,
-      created_at: updated.created_at?.toISOString() ?? null,
-      status_changed_at: updated.status_changed_at?.toISOString() ?? null,
+  return NextResponse.json(
+    {
+      ok: true,
+      row: {
+        id: updated.id,
+        order_num: updated.order_num,
+        sprint_number: updated.sprint_number,
+        sprint_status: updated.sprint_status,
+        short_description: updated.short_description,
+        description_prompt: updated.description_prompt,
+        task_status: updated.task_status,
+        task_type: updated.task_type,
+        modules: updated.modules,
+        components: updated.components,
+        complexity: updated.complexity,
+        prompt_model: updated.prompt_model,
+        prompt_created_at: updated.prompt_created_at?.toISOString() ?? null,
+        prompt_duration_sec: updated.prompt_duration_sec ?? null,
+        prompt_log_id: updated.prompt_log_id,
+        doc_link: updated.doc_link,
+        test_order_or_link: updated.test_order_or_link,
+        created_at: updated.created_at?.toISOString() ?? null,
+        status_changed_at: updated.status_changed_at?.toISOString() ?? null,
+      },
     },
-  });
+    { headers: { "Cache-Control": "no-store" } }
+  );
 }
 
