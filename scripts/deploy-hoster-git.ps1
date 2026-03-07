@@ -5,9 +5,7 @@ param(
     # Если true — деплой разрешён даже при неком чистом рабочем дереве (НЕ рекомендуется).
     [switch]$AllowDirty = $false,
     # Игнорируем изменения/неотслеживаемые файлы Cursor (.cursor/...), чтобы они не блокировали деплой.
-    [switch]$IgnoreCursor = $true,
-    # По умолчанию деплой через очередь (worker). -NoQueue — прямой SSH (резерв).
-    [switch]$NoQueue = $false
+    [switch]$IgnoreCursor = $true
 )
 
 $HostAlias = "hoster"
@@ -52,39 +50,20 @@ try {
         throw "git push origin $Branch failed"
     }
 
-    # 3) Деплой — по умолчанию через очередь (deploy-worker), иначе прямой SSH
-    if (-not $NoQueue) {
-        Write-Host "[2/2] Adding deploy to queue via API (worker will run env-deploy.sh for $Env)..." -ForegroundColor Cyan
-        $body = @{
-            environment_name = $Env
-            operation = "deploy"
-            branch = $Branch
-            requested_by = "deploy-hoster-git.ps1"
-        } | ConvertTo-Json
-        
-        try {
-            $response = Invoke-RestMethod -Uri "$ApiUrl/queue" -Method POST -ContentType "application/json" -Body $body
-            if ($response.ok) {
-                Write-Host "Deploy queued successfully. Queue ID: $($response.id). Worker obrabotaet ochered za 1-5 min (prod)." -ForegroundColor Green
-            } else {
-                throw "API returned error: $($response.error)"
-            }
-        } catch {
-            Write-Host "Failed to queue via API, falling back to direct SSH..." -ForegroundColor Yellow
-            $cmd = if ($Env -eq "prod") { "cd $RemotePath; bash scripts/deploy-from-git.sh $Branch" } else { "cd $RemotePath; bash scripts/env-deploy.sh $Env $Branch" }
-            ssh $HostAlias $cmd
-            if ($LASTEXITCODE -ne 0) {
-                throw "Remote deploy failed"
-            }
-        }
-    } else {
-        Write-Host "[2/2] Direct SSH (NoQueue): running deploy on $HostAlias..." -ForegroundColor Cyan
-        $cmd = if ($Env -eq "prod") { "cd $RemotePath; bash scripts/deploy-from-git.sh $Branch" } else { "cd $RemotePath; bash scripts/env-deploy.sh $Env $Branch" }
-        ssh $HostAlias $cmd
-        if ($LASTEXITCODE -ne 0) {
-            throw "Remote deploy failed"
-        }
+    # 3) Деплой только через очередь (worker). Прямой SSH отключён.
+    Write-Host "[2/2] Adding deploy to queue via API (worker will run env-deploy.sh for $Env)..." -ForegroundColor Cyan
+    $body = @{
+        environment_name = $Env
+        operation = "deploy"
+        branch = $Branch
+        requested_by = "deploy-hoster-git.ps1"
+    } | ConvertTo-Json
+
+    $response = Invoke-RestMethod -Uri "$ApiUrl/queue" -Method POST -ContentType "application/json" -Body $body
+    if (-not $response.ok) {
+        throw "API returned error: $($response.error)"
     }
+    Write-Host "Deploy queued successfully. Queue ID: $($response.id). Worker obrabotaet ochered za 1-5 min (prod)." -ForegroundColor Green
 
     Write-Host "Deploy to $Env completed. Commit: $commit" -ForegroundColor Green
 }

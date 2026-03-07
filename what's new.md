@@ -25,6 +25,16 @@
 
 ### ______***UPDATE***________
 
+**07.03.2026 >** Деплой только через очередь; прямой SSH и -NoQueue отключены
+
+**2.1 В приложении Комиссионка (web)**  
+Скрипт [scripts/deploy-hoster-git.ps1](scripts/deploy-hoster-git.ps1): убран параметр `-NoQueue` и fallback на прямой SSH при сбое API. Деплой возможен только путём постановки задачи в очередь (POST /api/deploy/queue); при недоступности API скрипт завершается с ошибкой. Резервный путь — только `deploy-hoster.ps1 -Upload -Restart` (scp). Обновлены [AGENTS.md](AGENTS.md), [docs/manual/DEPLOY-AGENT.md](docs/manual/DEPLOY-AGENT.md), [docs/manual/app-komissionka.md](docs/manual/app-komissionka.md), правила .cursor. app v1.14.3 → v1.14.4 (патч).
+
+**2.2–2.4**  
+Без изменений. agent v1.5.6, tgbot v1.1.0.
+
+---
+
 **07.03.2026 >** Прод-среда: не показывала версию и статус active (показывала stopped)
 
 **2.1 В приложении Комиссионка (web)**  

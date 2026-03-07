@@ -17,18 +17,7 @@
    .\scripts\deploy-hoster-git.ps1
    ```
    Или явно прод и ветка: `.\scripts\deploy-hoster-git.ps1 -Branch main` (среда prod по умолчанию).
-3. Скрипт сам: проверит чистое дерево git → `git push origin main` → отправит задачу в очередь (POST `/api/deploy/queue`). Обработчик на сервере (**deploy-worker**) выполнит `env-deploy.sh prod main` в `~/komissionka` в течение 1–5 минут (fetch, npm ci, prisma, build, pm2 restart).
-4. Если в консоли появилось **«Failed to queue via API, falling back to direct SSH»** — скрипт сам переключился на прямой SSH и запустил деплой на сервере; дождись окончания (обновление кода, npm install, build, pm2 restart).
-
-## Резервный вариант (прямой SSH без очереди)
-
-Если очередь часто недоступна или нужно гарантированно выполнить деплой без API:
-
-```powershell
-.\scripts\deploy-hoster-git.ps1 -NoQueue
-```
-
-Скрипт сразу выполнит на сервере `deploy-from-git.sh` (prod) или `env-deploy.sh` (test1, …) по SSH, без постановки в очередь.
+3. Скрипт сам: проверит чистое дерево git → `git push origin main` → отправит задачу в очередь (POST `/api/deploy/queue`). Обработчик на сервере (**deploy-worker**) выполнит `env-deploy.sh prod main` в `~/komissionka` в течение 1–5 минут (fetch, npm ci, prisma, build, pm2 restart). Деплой разрешён только через очередь; при недоступности API скрипт завершится с ошибкой. Резерв: `.\scripts\deploy-hoster.ps1 -Upload -Restart` (scp).
 
 ## Деплой в тестовую среду (test1, test2, …)
 
