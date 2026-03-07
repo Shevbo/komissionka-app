@@ -17,6 +17,10 @@ fi
 ENV_DIR="$HOME/komissionka-${ENV_NAME}"
 DB_NAME="${DB_NAME:-komissionka_${ENV_NAME}}"
 PORT_AGENT=$((PORT_APP + 100))
+# Prod agent uses 3140; avoid conflict so test env never binds to 3140 (prevents EADDRINUSE)
+if [[ "$PORT_AGENT" -eq 3140 ]]; then
+  PORT_AGENT=3141
+fi
 PORT_BOT=$((PORT_APP + 200))
 
 echo "=== Creating environment: $ENV_NAME ==="
@@ -91,7 +95,7 @@ module.exports = {
       node_args: "--max-old-space-size=384",
       env: {
         NODE_ENV: "production",
-        PORT: "$PORT_AGENT",
+        AGENT_PORT: "$PORT_AGENT",
         TZ: "Europe/Moscow"
       }
     },
