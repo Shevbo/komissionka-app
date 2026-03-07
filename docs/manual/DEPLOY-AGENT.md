@@ -16,7 +16,8 @@
    ```powershell
    .\scripts\deploy-hoster-git.ps1
    ```
-   Или явно прод и ветка: `.\scripts\deploy-hoster-git.ps1 -Branch main` (среда prod по умолчанию).
+   Или явно прод и ветка: `.\scripts\deploy-hoster-git.ps1 -Branch main` (среда prod по умолчанию).  
+   Скрипт отправляет задачу в очередь по API; при 403 нужно передать ключ API: задайте переменную `$env:AGENT_API_KEY` (значение из `AGENT_API_KEY` в `.env` на сервере) перед запуском скрипта. Либо ставьте задачу в очередь из админки (вкладка «Деплой» → кнопка «Деплой» у нужной среды).
 3. Скрипт сам: проверит чистое дерево git → `git push origin main` → отправит задачу в очередь (POST `/api/deploy/queue`). Обработчик на сервере (**deploy-worker**) выполнит `env-deploy.sh prod main` в `~/komissionka` в течение 1–5 минут (fetch, npm ci, prisma, build, pm2 restart). Деплой разрешён только через очередь; при недоступности API скрипт завершится с ошибкой. Резерв: `.\scripts\deploy-hoster.ps1 -Upload -Restart` (scp).
 
 ## Деплой в тестовую среду (test1, test2, …)

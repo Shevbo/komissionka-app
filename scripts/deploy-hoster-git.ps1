@@ -59,7 +59,9 @@ try {
         requested_by = "deploy-hoster-git.ps1"
     } | ConvertTo-Json
 
-    $response = Invoke-RestMethod -Uri "$ApiUrl/queue" -Method POST -ContentType "application/json" -Body $body
+    $headers = @{ "Content-Type" = "application/json" }
+    if ($env:AGENT_API_KEY) { $headers["X-Agent-API-Key"] = $env:AGENT_API_KEY }
+    $response = Invoke-RestMethod -Uri "$ApiUrl/queue" -Method POST -Headers $headers -Body $body
     if (-not $response.ok) {
         throw "API returned error: $($response.error)"
     }
@@ -69,6 +71,11 @@ try {
 }
 catch {
     Write-Host ""; Write-Host "Error in deploy-hoster-git.ps1:" $_.Exception.Message -ForegroundColor Red
+    if ($_.Exception.Message -match "403") {
+        Write-Host "Podskazka: ustanovite AGENT_API_KEY (znachenie iz .env na servere), naprimer:" -ForegroundColor Yellow
+        Write-Host '  $env:AGENT_API_KEY = "vash-klyuch"' -ForegroundColor Gray
+        Write-Host "Ili zapuskajte deploy iz vkladki Deploy v adminke (knopka Deploy u sredy)." -ForegroundColor Yellow
+    }
     exit 1
 }
 finally {
