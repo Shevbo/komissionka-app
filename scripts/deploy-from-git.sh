@@ -53,9 +53,13 @@ echo "[deploy-from-git] Now at commit $CURRENT_COMMIT"
 
 echo "[2/4] Installing dependencies (npm ci, fallback to npm install)..."
 if ! npm ci; then
-  echo "[deploy-from-git] npm ci failed, falling back to npm install..."
-  LOG_ERROR="npm ci failed"
-  npm install
+  echo "[deploy-from-git] npm ci failed, cleaning node_modules and retrying..."
+  rm -rf node_modules
+  if ! npm ci; then
+    echo "[deploy-from-git] npm ci failed again, falling back to npm install..."
+    LOG_ERROR="npm ci failed"
+    npm install
+  fi
 fi
 LOG_ERROR=""
 
