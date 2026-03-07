@@ -2515,9 +2515,6 @@ export default function AdminPage() {
                       ))}
                     </SelectContent>
                   </Select>
-                  <Link href="/admin/claude-setup" className="text-xs text-primary hover:underline" title="Инструкция по подключению Claude">
-                    Подключить Claude
-                  </Link>
                   <Link href="/admin/agent-models-help" className="text-xs text-primary hover:underline" title="Справка по моделям Google AI Pro">
                     Справка по моделям
                   </Link>
