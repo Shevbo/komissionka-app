@@ -41,3 +41,5 @@
 ## Деплой (выполнять самому)
 
 После изменений: в проде использовать git-деплой `.\scripts\deploy-hoster-git.ps1` (push → deploy-from-git.sh на сервере). Скрипт `.\scripts\deploy-hoster.ps1 -Upload -Restart` оставлен как резервный вариант (scp/rsync) на случай проблем с git-деплоем. Не просить пользователя деплоить.
+
+**Как деплоить (для агента в другом чате):** Выполни из корня проекта `.\scripts\deploy-hoster-git.ps1`. Для тестовой среды: `.\scripts\deploy-hoster-git.ps1 -Env test1`. Подробная инструкция: [docs/manual/DEPLOY-AGENT.md](docs/manual/DEPLOY-AGENT.md). Вкладка «Деплой» в админке (https://komissionka92.ru/admin) показывает среды, очередь и журнал; если видишь «Нет доступа» — нужен вход под admin. Очередь пуста, когда все операции уже выполнены; активность видна в «Журнал операций».

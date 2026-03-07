@@ -70,11 +70,15 @@ interface LogEntry {
   created_at: string;
 }
 
+const fetchOpts: RequestInit = { credentials: "include" };
+
 export function DeployTab() {
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [accessError, setAccessError] = useState<string | null>(null);
+  const [lastFetch, setLastFetch] = useState<Date | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showCopyDialog, setShowCopyDialog] = useState(false);
   const [showLogDialog, setShowLogDialog] = useState<LogEntry | null>(null);
@@ -82,16 +86,24 @@ export function DeployTab() {
   const [copySettings, setCopySettings] = useState({ source: "", target: "" });
 
   const fetchData = useCallback(async () => {
+    setAccessError(null);
     try {
       const [envRes, queueRes, logRes] = await Promise.all([
-        fetch("/api/deploy/environments"),
-        fetch("/api/deploy/queue?limit=20"),
-        fetch("/api/deploy/log?limit=30"),
+        fetch("/api/deploy/environments", fetchOpts),
+        fetch("/api/deploy/queue?limit=20", fetchOpts),
+        fetch("/api/deploy/log?limit=30", fetchOpts),
       ]);
+
+      if (envRes.status === 403 || queueRes.status === 403 || logRes.status === 403) {
+        setAccessError("Нет доступа к API деплоя. Войдите в админку как администратор.");
+      }
 
       if (envRes.ok) {
         const data = await envRes.json();
         setEnvironments(data.data || []);
+      } else if (envRes.status !== 403) {
+        const data = await envRes.json().catch(() => ({}));
+        toast.error(data.error || "Ошибка загрузки сред");
       }
       if (queueRes.ok) {
         const data = await queueRes.json();
@@ -101,8 +113,11 @@ export function DeployTab() {
         const data = await logRes.json();
         setLogs(data.data || []);
       }
+      setLastFetch(new Date());
     } catch (err) {
       console.error("Failed to fetch deploy data:", err);
+      setAccessError("Ошибка сети при загрузке данных деплоя.");
+      toast.error("Не удалось загрузить данные деплоя");
     } finally {
       setLoading(false);
     }
@@ -122,6 +137,7 @@ export function DeployTab() {
 
     try {
       const res = await fetch("/api/deploy/environments", {
+        ...fetchOpts,
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -149,6 +165,7 @@ export function DeployTab() {
   const handleDeploy = async (envId: string, envName: string) => {
     try {
       const res = await fetch("/api/deploy/queue", {
+        ...fetchOpts,
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -179,6 +196,7 @@ export function DeployTab() {
 
     try {
       const res = await fetch("/api/deploy/copy", {
+        ...fetchOpts,
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -209,9 +227,7 @@ export function DeployTab() {
     }
 
     try {
-      const res = await fetch(`/api/deploy/environments/${envId}`, {
-        method: "DELETE",
-      });
+      const res = await fetch(`/api/deploy/environments/${envId}`, { ...fetchOpts, method: "DELETE" });
 
       const data = await res.json();
       if (!res.ok) {
@@ -228,9 +244,7 @@ export function DeployTab() {
 
   const handleCancelQueue = async (queueId: string) => {
     try {
-      const res = await fetch(`/api/deploy/queue/${queueId}`, {
-        method: "DELETE",
-      });
+      const res = await fetch(`/api/deploy/queue/${queueId}`, { ...fetchOpts, method: "DELETE" });
 
       const data = await res.json();
       if (!res.ok) {
@@ -279,6 +293,16 @@ export function DeployTab() {
 
   return (
     <div className="space-y-6">
+      {accessError && (
+        <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
+          {accessError}
+        </div>
+      )}
+      {lastFetch && !accessError && (
+        <p className="text-xs text-gray-500">
+          Обновлено: {lastFetch.toLocaleTimeString("ru-RU")}. Очередь: {queue.length}, журнал: {logs.length} записей.
+        </p>
+      )}
       {/* Environments Section */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
