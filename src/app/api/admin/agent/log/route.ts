@@ -6,7 +6,6 @@ import { readFileSync, existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const AGENT_LOGS_DIR = ".agent-logs";
-const LAST_REASONING_FILE = "last-reasoning.txt";
 
 /** Допустимые символы в logId (без path traversal). */
 const LOG_ID_REGEX = /^[a-zA-Z0-9_-]+$/;
@@ -18,8 +17,9 @@ function getLogsRoot(): string {
 }
 
 /**
- * GET ?logId=xxx — возвращает содержимое файла с полным логом рассуждений ИИ.
- * Только для admin. Файл: .agent-logs/<logId>.log. Если файла нет — отдаём last-reasoning.txt (последний ход).
+ * GET ?logId=xxx — возвращает содержимое файла с полным логом рассуждений ИИ по этому запросу.
+ * Только для admin. Файл: .agent-logs/<logId>.log. Возвращаем только лог по logId, без подстановки
+ * last-reasoning.txt (чтобы не показывать ход рассуждений от другого промпта).
  */
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
@@ -42,32 +42,23 @@ export async function GET(req: Request) {
   const root = getLogsRoot();
   const dir = join(root, AGENT_LOGS_DIR);
   const filePath = join(dir, `${logId}.log`);
-  const fallbackPath = join(dir, LAST_REASONING_FILE);
 
-  let content: string;
-  let filename: string;
-  if (existsSync(filePath)) {
-    try {
-      content = readFileSync(filePath, "utf-8");
-      filename = `${logId}.log`;
-    } catch {
-      return NextResponse.json({ error: "Failed to read log" }, { status: 500 });
-    }
-  } else if (existsSync(fallbackPath)) {
-    try {
-      content = `[Файл ${logId}.log не найден — показан последний сохранённый ход рассуждений]\n\n${readFileSync(fallbackPath, "utf-8")}`;
-      filename = LAST_REASONING_FILE;
-    } catch {
-      return NextResponse.json({ error: "Failed to read fallback log" }, { status: 500 });
-    }
-  } else {
-    return NextResponse.json({ error: "Log not found" }, { status: 404 });
+  if (!existsSync(filePath)) {
+    return NextResponse.json(
+      { error: "Log not found", message: "Лог для этого запроса не найден. Возможно, создан в другой среде или удалён." },
+      { status: 404 }
+    );
   }
 
-  return new NextResponse(content, {
-    headers: {
-      "Content-Type": "text/plain; charset=utf-8",
-      "Content-Disposition": `inline; filename="${filename}"`,
-    },
-  });
+  try {
+    const content = readFileSync(filePath, "utf-8");
+    return new NextResponse(content, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Content-Disposition": `inline; filename="${logId}.log"`,
+      },
+    });
+  } catch {
+    return NextResponse.json({ error: "Failed to read log" }, { status: 500 });
+  }
 }

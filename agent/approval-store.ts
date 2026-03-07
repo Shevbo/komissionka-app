@@ -178,7 +178,7 @@ export function setPending(code: string, pending: Pending): void {
   saveStore();
 }
 
-/** Обновляет момент последнего показа кода (ответ модели с «Подтвердите кодом: XXXX»). TTL считается от него. */
+/** Обновляет момент последнего показа (для TTL). Подтверждение — вторым сообщением, не кодом. */
 export function refreshPendingShown(code: string): void {
   ensureLoaded();
   const p = store.get(code);
