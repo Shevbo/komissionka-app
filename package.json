@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "rd /s /q .next 2>nul & cross-env NODE_OPTIONS=--max-old-space-size=4096 next dev --turbo",
     "build": "next build",
-    "start": "cross-env NODE_OPTIONS=--max-old-space-size=512 next start",
+    "start": "next start",
     "lint": "eslint",
     "seed": "tsx prisma/seed.ts",
     "seed:demo": "tsx scripts/seed-demo.ts",
