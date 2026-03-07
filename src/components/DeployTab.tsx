@@ -279,12 +279,22 @@ export function DeployTab() {
   };
 
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleString("ru-RU", {
+    const d = new Date(dateStr);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const dDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const time = d.toLocaleString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+    if (dDate.getTime() === today.getTime()) return `сегодня ${time}`;
+    if (dDate.getTime() === yesterday.getTime()) return `вчера ${time}`;
+    return d.toLocaleString("ru-RU", {
       day: "2-digit",
       month: "2-digit",
+      year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
       hour: "2-digit",
       minute: "2-digit",
-    });
+    }).replace(/\s+/g, " ");
   };
 
   if (loading) {
@@ -449,6 +459,9 @@ export function DeployTab() {
       <Card>
         <CardHeader className="pb-2">
           <h3 className="text-lg font-semibold">Журнал операций</h3>
+          <p className="text-xs text-muted-foreground font-normal mt-1">
+            Записи появляются при операциях через очередь (кнопка «Деплой», создание/копирование среды). Деплой через скрипт с ключом -NoQueue в журнал не попадает. Нет записей за сегодня — нормально, если сегодня деплой не запускали.
+          </p>
         </CardHeader>
         <CardContent>
           <Table>
