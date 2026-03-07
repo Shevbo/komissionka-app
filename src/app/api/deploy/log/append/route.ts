@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "komiss/lib/prisma";
+import { notifyDeployToTelegram } from "komiss/lib/deploy-telegram-notify";
 
 /**
  * Добавление записи в журнал деплоя из скриптов (deploy-from-git.sh, env-deploy.sh).
@@ -51,6 +52,15 @@ export async function POST(request: Request) {
         requested_by: requested_by || "script",
       },
     });
+    notifyDeployToTelegram({
+      environment_name,
+      operation,
+      status,
+      output: output ?? undefined,
+      error: error ?? undefined,
+      duration_ms: duration_ms ?? undefined,
+      requested_by: requested_by || "script",
+    }).catch(() => {});
     return NextResponse.json({ ok: true, id: log.id });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Failed to append log";

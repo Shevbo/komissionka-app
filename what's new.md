@@ -25,6 +25,16 @@
 
 ### ______***UPDATE***________
 
+**07.03.2026 >** Уведомление администратору в Telegram при завершении деплоя
+
+**2.1 В приложении Комиссионка (web)**  
+После записи в журнал деплоя (POST /api/deploy/log/append) отправляется уведомление в Telegram всем администраторам (profiles с role=admin и заполненным telegram_id): статус (completed/failed), среда, операция, версии app/agent/tgbot, кто запустил, длительность, краткий вывод/ошибка. Реализовано: [src/lib/deploy-telegram-notify.ts](src/lib/deploy-telegram-notify.ts), вызов из [src/app/api/deploy/log/append/route.ts](src/app/api/deploy/log/append/route.ts). Токен бота — TELEGRAM_BOT_TOKEN. app v1.13.7 → v1.14.0 (минор, фича).
+
+**2.2–2.4**  
+Без изменений. agent v1.5.5, tgbot v1.1.0.
+
+---
+
 **07.03.2026 >** Ход рассуждений показывал лог не от текущего промпта
 
 **2.1 В приложении Комиссионка (web)**  
