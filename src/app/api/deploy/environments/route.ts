@@ -2,6 +2,43 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "komiss/lib/auth";
 import { prisma } from "komiss/lib/prisma";
+import * as http from "node:http";
+
+async function fetchVersionFromPort(port: number): Promise<{ app?: string; agent?: string; tgbot?: string } | null> {
+  return new Promise((resolve) => {
+    const req = http.request(
+      {
+        host: "127.0.0.1",
+        port,
+        path: "/api/version",
+        method: "GET",
+        timeout: 2000,
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (c: Buffer) => chunks.push(c));
+        res.on("end", () => {
+          try {
+            const data = JSON.parse(Buffer.concat(chunks).toString("utf-8")) as {
+              app?: string;
+              agent?: string;
+              tgbot?: string;
+            };
+            resolve(data);
+          } catch {
+            resolve(null);
+          }
+        });
+      }
+    );
+    req.on("error", () => resolve(null));
+    req.on("timeout", () => {
+      req.destroy();
+      resolve(null);
+    });
+    req.end();
+  });
+}
 
 async function isAdminRequest(request: Request): Promise<boolean> {
   const agentKey = request.headers.get("x-agent-api-key");
@@ -32,23 +69,29 @@ export async function GET(request: Request) {
     },
   });
 
-  return NextResponse.json({
-    data: environments.map((env) => ({
-      id: env.id,
-      name: env.name,
-      port_app: env.port_app,
-      port_agent: env.port_agent,
-      port_bot: env.port_bot,
-      directory: env.directory,
-      db_name: env.db_name,
-      branch: env.branch,
-      status: env.status,
-      is_prod: env.is_prod,
-      created_at: env.created_at.toISOString(),
-      updated_at: env.updated_at.toISOString(),
-      active_operation: env.queue_items[0]?.operation ?? null,
-    })),
-  });
+  const withVersions = await Promise.all(
+    environments.map(async (env) => {
+      const version = env.status === "active" ? await fetchVersionFromPort(env.port_app) : null;
+      return {
+        id: env.id,
+        name: env.name,
+        port_app: env.port_app,
+        port_agent: env.port_agent,
+        port_bot: env.port_bot,
+        directory: env.directory,
+        db_name: env.db_name,
+        branch: env.branch,
+        status: env.status,
+        is_prod: env.is_prod,
+        created_at: env.created_at.toISOString(),
+        updated_at: env.updated_at.toISOString(),
+        active_operation: env.queue_items[0]?.operation ?? null,
+        version: version ? { app: version.app, agent: version.agent, tgbot: version.tgbot } : null,
+      };
+    })
+  );
+
+  return NextResponse.json({ data: withVersions });
 }
 
 export async function POST(request: Request) {

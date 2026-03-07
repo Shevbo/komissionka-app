@@ -42,6 +42,7 @@ interface Environment {
   is_prod: boolean;
   created_at: string;
   active_operation: string | null;
+  version?: { app?: string; agent?: string; tgbot?: string } | null;
 }
 
 interface QueueItem {
@@ -76,7 +77,6 @@ const fetchOpts: RequestInit = { credentials: "include" };
 export function DeployTab() {
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [queue, setQueue] = useState<QueueItem[]>([]);
-  const [logs, setLogs] = useState<LogEntry[]>([]);
   const [allLogs, setAllLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [accessError, setAccessError] = useState<string | null>(null);
@@ -90,14 +90,13 @@ export function DeployTab() {
   const fetchData = useCallback(async () => {
     setAccessError(null);
     try {
-      const [envRes, queueRes, logRes, allLogRes] = await Promise.all([
+      const [envRes, queueRes, allLogRes] = await Promise.all([
         fetch("/api/deploy/environments", fetchOpts),
         fetch("/api/deploy/queue?limit=20", fetchOpts),
-        fetch("/api/deploy/log?limit=30", fetchOpts),
         fetch("/api/deploy/log?limit=100", fetchOpts),
       ]);
 
-      if (envRes.status === 403 || queueRes.status === 403 || logRes.status === 403 || allLogRes.status === 403) {
+      if (envRes.status === 403 || queueRes.status === 403 || allLogRes.status === 403) {
         setAccessError("Нет доступа к API деплоя. Войдите в админку как администратор.");
       }
 
@@ -111,10 +110,6 @@ export function DeployTab() {
       if (queueRes.ok) {
         const data = await queueRes.json();
         setQueue(data.data || []);
-      }
-      if (logRes.ok) {
-        const data = await logRes.json();
-        setLogs(data.data || []);
       }
       if (allLogRes.ok) {
         const data = await allLogRes.json();
@@ -317,7 +312,7 @@ export function DeployTab() {
       )}
       {lastFetch && !accessError && (
         <p className="text-xs text-gray-500">
-          Обновлено: {lastFetch.toLocaleTimeString("ru-RU")}. Очередь: {queue.length}, журнал: {logs.length} записей.
+          Обновлено: {lastFetch.toLocaleTimeString("ru-RU")}. Очередь: {queue.length}, журнал: {allLogs.length} записей.
         </p>
       )}
       {/* Environments Section */}
@@ -341,6 +336,7 @@ export function DeployTab() {
             <TableHeader>
               <TableRow>
                 <TableHead>Имя</TableHead>
+                <TableHead>Версия</TableHead>
                 <TableHead>Статус</TableHead>
                 <TableHead>Ветка</TableHead>
                 <TableHead>Порт</TableHead>
@@ -354,6 +350,11 @@ export function DeployTab() {
                   <TableCell className="font-medium">
                     {env.name}
                     {env.is_prod && <span className="ml-2 text-xs text-orange-600">(prod)</span>}
+                  </TableCell>
+                  <TableCell className="text-xs text-gray-600 dark:text-gray-400">
+                    {env.version?.app != null ? `app ${env.version.app}` : "—"}
+                    {env.version?.agent != null ? ` · agent ${env.version.agent}` : ""}
+                    {env.version?.tgbot != null ? ` · bot ${env.version.tgbot}` : ""}
                   </TableCell>
                   <TableCell>
                     {getStatusBadge(env.status)}
@@ -401,7 +402,7 @@ export function DeployTab() {
               ))}
               {environments.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-gray-500">
+                  <TableCell colSpan={7} className="text-center text-gray-500">
                     Нет сред
                   </TableCell>
                 </TableRow>
@@ -517,60 +518,6 @@ export function DeployTab() {
               {allLogs.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center text-gray-500">
-                    Нет записей
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      {/* Log Section (short: last 30) */}
-      <Card>
-        <CardHeader className="pb-2">
-          <h3 className="text-lg font-semibold">Журнал операций</h3>
-          <p className="text-xs text-muted-foreground font-normal mt-1">
-            Записи появляются при операциях через очередь (кнопка «Деплой», создание/копирование среды). Деплой через скрипт с ключом -NoQueue в журнал не попадает. Нет записей за сегодня — нормально, если сегодня деплой не запускали.
-          </p>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Среда</TableHead>
-                <TableHead>Операция</TableHead>
-                <TableHead>Статус</TableHead>
-                <TableHead>Длительность</TableHead>
-                <TableHead>Время</TableHead>
-                <TableHead>Действия</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {logs.map((log) => (
-                <TableRow key={log.id}>
-                  <TableCell>{log.environment_name || "-"}</TableCell>
-                  <TableCell>{log.operation}</TableCell>
-                  <TableCell>{getStatusBadge(log.status)}</TableCell>
-                  <TableCell>
-                    {log.duration_ms ? `${(log.duration_ms / 1000).toFixed(1)}s` : "-"}
-                  </TableCell>
-                  <TableCell>{formatDate(log.created_at)}</TableCell>
-                  <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowLogDialog(log)}
-                      title="Подробнее"
-                    >
-                      Лог
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {logs.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center text-gray-500">
                     Нет записей
                   </TableCell>
                 </TableRow>

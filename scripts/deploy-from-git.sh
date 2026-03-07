@@ -2,10 +2,11 @@
 set -euo pipefail
 
 # Git-based deploy on hoster: pull code from origin and restart services.
-# Usage: bash scripts/deploy-from-git.sh [branch]
-# Default branch: main
+# Usage: bash scripts/deploy-from-git.sh [branch] [reexec]
+# Default branch: main. After git pull we re-exec self so the rest (and trap) run from new script.
 
 BRANCH="${1:-main}"
+REEXEC="${2:-}"
 DEPLOY_START_TS=$(date +%s)
 LOG_RESULT="completed"
 LOG_ERROR=""
@@ -39,9 +40,14 @@ fi
 
 echo "[deploy-from-git] Using branch: $BRANCH"
 
-echo "[1/4] Updating code from origin/$BRANCH..."
-git fetch origin "$BRANCH"
-git reset --hard "origin/$BRANCH"
+if [[ "$REEXEC" != "reexec" ]]; then
+  echo "[1/4] Updating code from origin/$BRANCH..."
+  git fetch origin "$BRANCH"
+  git reset --hard "origin/$BRANCH"
+  echo "[deploy-from-git] Re-executing with new script so log append and trap run..."
+  exec bash "$(dirname "$0")/deploy-from-git.sh" "$BRANCH" "reexec"
+fi
+
 CURRENT_COMMIT="$(git rev-parse --short HEAD || echo unknown)"
 echo "[deploy-from-git] Now at commit $CURRENT_COMMIT"
 
