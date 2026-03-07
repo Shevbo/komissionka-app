@@ -10,6 +10,7 @@ REEXEC="${2:-}"
 DEPLOY_START_TS=$(date +%s)
 LOG_RESULT="completed"
 LOG_ERROR=""
+APPEND_DONE=0
 
 cd "$(dirname "$0")/.." || exit 1
 
@@ -30,7 +31,7 @@ log_append() {
   fi
 }
 
-trap 'log_append "$LOG_RESULT" "$LOG_ERROR"' EXIT
+trap '[[ "$APPEND_DONE" -eq 0 ]] && log_append "$LOG_RESULT" "$LOG_ERROR"' EXIT
 trap 'LOG_RESULT=failed; LOG_ERROR="Deploy failed"' ERR
 
 # Optional: load DEPLOY_LOG_SECRET from .env
@@ -72,6 +73,9 @@ npx prisma generate
 echo "[4/4] Building app and restarting PM2..."
 npm run build
 export TZ=Europe/Moscow
+# Записываем успех в журнал до перезапуска PM2 (пока приложение ещё отвечает)
+log_append "completed" ""
+APPEND_DONE=1
 pm2 restart komissionka agent bot deploy-worker --update-env
 
 echo "[deploy-from-git] Done. Commit: $CURRENT_COMMIT"
