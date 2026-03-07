@@ -65,7 +65,7 @@ try {
         try {
             $response = Invoke-RestMethod -Uri "$ApiUrl/queue" -Method POST -ContentType "application/json" -Body $body
             if ($response.ok) {
-                Write-Host "Deploy queued successfully. Queue ID: $($response.id). Worker обработает в течение ~1–5 мин." -ForegroundColor Green
+                Write-Host "Deploy queued successfully. Queue ID: $($response.id). Worker obrabotaet ochered za 1-5 min (prod)." -ForegroundColor Green
             } else {
                 throw "API returned error: $($response.error)"
             }
@@ -89,7 +89,7 @@ try {
     Write-Host "Deploy to $Env completed. Commit: $commit" -ForegroundColor Green
 }
 catch {
-    Write-Host "`nError in deploy-hoster-git.ps1: $_" -ForegroundColor Red
+    Write-Host ""; Write-Host "Error in deploy-hoster-git.ps1:" $_.Exception.Message -ForegroundColor Red
     exit 1
 }
 finally {
