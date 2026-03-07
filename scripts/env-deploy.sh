@@ -43,7 +43,7 @@ log_append() {
   fi
 }
 trap 'log_append "$LOG_RESULT" "$LOG_ERROR"' EXIT
-trap 'LOG_RESULT=failed; LOG_ERROR="Deploy failed"' ERR
+trap 'e=$?; LOG_RESULT=failed; LOG_ERROR="Exit $e. ${BASH_COMMAND:0:150}"' ERR
 
 # Load DEPLOY_LOG_SECRET from prod .env (app runs on prod)
 if [[ -f "$HOME/komissionka/.env" ]]; then
@@ -84,7 +84,7 @@ npm run build
 # Restart PM2
 echo "[5/5] Restarting PM2 processes..."
 if [[ "$ENV_NAME" == "prod" ]]; then
-  pm2 restart komissionka agent bot
+  pm2 restart komissionka agent bot deploy-worker --update-env
 else
   pm2 restart "komissionka-${ENV_NAME}" "agent-${ENV_NAME}" "bot-${ENV_NAME}" 2>/dev/null || \
     pm2 start "$ENV_DIR/ecosystem.config.cjs"

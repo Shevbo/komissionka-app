@@ -32,7 +32,7 @@ log_append() {
 }
 
 trap '[[ "$APPEND_DONE" -eq 0 ]] && log_append "$LOG_RESULT" "$LOG_ERROR"' EXIT
-trap 'LOG_RESULT=failed; LOG_ERROR="Deploy failed"' ERR
+trap 'e=$?; LOG_RESULT=failed; LOG_ERROR="Exit $e. ${BASH_COMMAND:0:150}"' ERR
 
 # Optional: load DEPLOY_LOG_SECRET from .env
 if [[ -f .env ]]; then
