@@ -62,7 +62,7 @@ npx prisma generate
 echo "[4/4] Building app and restarting PM2..."
 npm run build
 export TZ=Europe/Moscow
-pm2 restart komissionka agent bot --update-env
+pm2 restart komissionka agent bot deploy-worker --update-env
 
 echo "[deploy-from-git] Done. Commit: $CURRENT_COMMIT"
 

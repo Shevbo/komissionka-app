@@ -262,6 +262,23 @@ async function main(): Promise<void> {
     });
   }
 
+  // Если журнал пустой — одна запись, чтобы экран не был пустым
+  const logCount = await prisma.deploy_log.count();
+  if (logCount === 0) {
+    const envId = (await prisma.deploy_environments.findUnique({ where: { name: "prod" }, select: { id: true } }))?.id ?? null;
+    await prisma.deploy_log.create({
+      data: {
+        operation: "deploy",
+        status: "completed",
+        environment_id: envId,
+        source: "script",
+        requested_by: "init",
+        output: "Журнал всех операций активирован. Записи появляются при деплоях по очереди и при прямых запусках скриптов (deploy-from-git.sh, env-deploy.sh).",
+      },
+    });
+    console.log("[WORKER] Inserted init log entry");
+  }
+
   while (true) {
     await pollQueue();
     await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
