@@ -68,9 +68,19 @@ CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 echo "Resetting to origin/$CURRENT_BRANCH..."
 git reset --hard "origin/$CURRENT_BRANCH"
 
-# Install dependencies
+# Install dependencies (limit Node heap to reduce OOM; clean retry like deploy-from-git.sh)
 echo "[2/5] Installing dependencies..."
-npm ci 2>/dev/null || { LOG_ERROR="npm ci failed"; npm install; LOG_ERROR=""; }
+export NODE_OPTIONS="--max-old-space-size=2048"
+if ! npm ci 2>/dev/null; then
+  echo "[env-deploy] npm ci failed, cleaning node_modules and retrying..."
+  rm -rf node_modules
+  if ! npm ci 2>/dev/null; then
+    echo "[env-deploy] npm ci failed again, falling back to npm install..."
+    LOG_ERROR="npm ci failed"
+    npm install
+    LOG_ERROR=""
+  fi
+fi
 
 # Run Prisma
 echo "[3/5] Running Prisma migrations..."
