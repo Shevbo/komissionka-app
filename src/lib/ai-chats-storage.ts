@@ -1,12 +1,17 @@
 /**
  * Хранилище чатов ИИ: IndexedDB (до ~4ГБ) с fallback на localStorage.
- * Чаты хранятся до ручного удаления или достижения лимита.
+ * Отдельная серия чатов в каждом режиме (chat / consult / dev), хранятся до ручного удаления.
  */
 
 const DB_NAME = "komiss_ai_chats";
 const DB_VERSION = 1;
 const STORE = "sessions";
 const LEGACY_KEY = "komiss_ai_chats";
+
+const MODES: AiChatMode[] = ["chat", "consult", "dev"];
+function modeKey(mode: AiChatMode): string {
+  return `chats_${mode}`;
+}
 
 export type ChatMessageRow = { role: "user" | "assistant"; content: string; timestamp?: number };
 export type AiChatMode = "chat" | "consult" | "dev";
@@ -31,8 +36,6 @@ function openDb(): Promise<IDBDatabase> {
     };
   });
 }
-
-const DATA_KEY = "chats";
 
 function normalizeSessions(rawSessions: unknown[]): AiChatSession[] {
   return rawSessions.map((s, idx) => {
@@ -75,86 +78,133 @@ function normalizeSessions(rawSessions: unknown[]): AiChatSession[] {
   });
 }
 
-export async function loadAiChats(): Promise<AiChatsData | null> {
-  if (!hasIndexedDB()) return loadFromLocalStorage();
+/** Загружает все чаты; activeId возвращается для указанного режима. */
+export async function loadAiChats(currentMode: AiChatMode): Promise<AiChatsData | null> {
+  if (!hasIndexedDB()) return loadFromLocalStorage(currentMode);
   try {
     const db = await openDb();
-    const raw = await new Promise<string | undefined>((resolve, reject) => {
-      const tx = db.transaction(STORE, "readonly");
-      const req = tx.objectStore(STORE).get(DATA_KEY);
-      req.onerror = () => reject(req.error);
-      req.onsuccess = () => resolve(req.result?.value);
-    });
+    const loadKey = (key: string) =>
+      new Promise<string | undefined>((resolve, reject) => {
+        const tx = db.transaction(STORE, "readonly");
+        const req = tx.objectStore(STORE).get(key);
+        req.onerror = () => reject(req.error);
+        req.onsuccess = () => resolve(req.result?.value);
+      });
+
+    const legacyRaw = await loadKey("chats");
+    if (legacyRaw) {
+      const migrated = migrateFromLegacySingle(legacyRaw, currentMode);
+      if (migrated) {
+        await saveAiChats(migrated);
+        const delTx = db.transaction(STORE, "readwrite");
+        delTx.objectStore(STORE).delete("chats");
+        await new Promise<void>((res, rej) => {
+          delTx.oncomplete = () => res();
+          delTx.onerror = () => rej(delTx.error);
+        });
+      }
+      db.close();
+      return migrated;
+    }
+
+    const raws = await Promise.all(MODES.map((m) => loadKey(modeKey(m))));
     db.close();
-    if (!raw) return migrateFromLocalStorage();
-    const data = JSON.parse(raw) as AiChatsData;
-    if (!data || !Array.isArray(data.sessions)) return migrateFromLocalStorage();
-    const sessions = normalizeSessions(data.sessions);
-    return { sessions, activeId: data.activeId ?? null };
+
+    const parts: { sessions: AiChatSession[]; activeId: string | null }[] = raws.map((raw, i) => {
+      if (!raw) return { sessions: [], activeId: null };
+      try {
+        const data = JSON.parse(raw) as AiChatsData;
+        const sessions = Array.isArray(data.sessions) ? normalizeSessions(data.sessions) : [];
+        const activeId = data.activeId ?? null;
+        return { sessions, activeId };
+      } catch {
+        return { sessions: [], activeId: null };
+      }
+    });
+
+    const sessions = parts.flatMap((p) => p.sessions);
+    const activeId = parts[MODES.indexOf(currentMode)]?.activeId ?? null;
+    if (sessions.length === 0) return loadFromLocalStorage(currentMode);
+    return { sessions, activeId };
   } catch {
-    return loadFromLocalStorage();
+    return loadFromLocalStorage(currentMode);
   }
 }
 
-function loadFromLocalStorage(): AiChatsData | null {
+function loadFromLocalStorage(currentMode: AiChatMode): AiChatsData | null {
   try {
     const raw = localStorage.getItem(LEGACY_KEY);
     if (!raw) return null;
     const data = JSON.parse(raw) as AiChatsData;
     if (!data || !Array.isArray(data.sessions)) return null;
     const sessions = normalizeSessions(data.sessions);
-    return { sessions, activeId: data.activeId ?? null };
+    const activeId = data.activeId ?? null;
+    return { sessions, activeId };
+  } catch {
+    return null;
+  }
+}
+
+function migrateFromLegacySingle(legacyRaw: string, currentMode: AiChatMode): AiChatsData | null {
+  try {
+    const data = JSON.parse(legacyRaw) as AiChatsData;
+    if (!data || !Array.isArray(data.sessions)) return null;
+    const sessions = normalizeSessions(data.sessions);
+    const activeId = data.activeId ?? null;
+    return { sessions, activeId };
   } catch {
     return null;
   }
 }
 
 export async function saveAiChats(data: AiChatsData): Promise<void> {
-  let sessions = [...data.sessions];
-  let activeId = data.activeId;
+  const sessions = [...data.sessions];
+  const activeSession = data.activeId ? sessions.find((s) => s.id === data.activeId) : null;
 
-  const trySaveToIndexedDB = async (s: AiChatSession[], a: string | null) => {
-    const toSave: AiChatsData = { sessions: s, activeId: a };
-    const str = JSON.stringify(toSave);
-    const db = await openDb();
-    return new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORE, "readwrite");
-      const store = tx.objectStore(STORE);
-      store.put({ key: DATA_KEY, value: str });
-      tx.oncomplete = () => {
-        db.close();
-        resolve();
-      };
-      tx.onerror = () => {
-        db.close();
-        reject(tx.error);
-      };
-    });
+  const byMode = (m: AiChatMode) => sessions.filter((s) => s.mode === m);
+  const activeIdForMode = (m: AiChatMode): string | null => {
+    if (activeSession?.mode === m) return data.activeId;
+    const first = sessions.find((s) => s.mode === m);
+    return first?.id ?? null;
   };
 
-  const saveToLocalStorage = (s: AiChatSession[], a: string | null) => {
+  const trySaveToIndexedDB = async () => {
+    const db = await openDb();
+    const store = db.transaction(STORE, "readwrite").objectStore(STORE);
+    await Promise.all(
+      MODES.map((m) => {
+        const part: AiChatsData = { sessions: byMode(m), activeId: activeIdForMode(m) };
+        return new Promise<void>((resolve, reject) => {
+          const req = store.put({ key: modeKey(m), value: JSON.stringify(part) });
+          req.onsuccess = () => resolve();
+          req.onerror = () => reject(req.error);
+        });
+      })
+    );
+    db.close();
+  };
+
+  const saveToLocalStorageFallback = () => {
     try {
-      localStorage.setItem(LEGACY_KEY, JSON.stringify({ sessions: s, activeId: a }));
+      localStorage.setItem(LEGACY_KEY, JSON.stringify({ sessions, activeId: data.activeId }));
     } catch {
       /* ignore */
     }
   };
 
   if (!hasIndexedDB()) {
-    saveToLocalStorage(sessions, activeId);
+    saveToLocalStorageFallback();
     return;
   }
 
   try {
-    await trySaveToIndexedDB(sessions, activeId);
-  } catch (err) {
-    // Не удаляем старые сессии автоматически: если IndexedDB переполнен или недоступен,
-    // сохраняем полный набор чатов в localStorage как резервную копию.
-    saveToLocalStorage(sessions, activeId);
+    await trySaveToIndexedDB();
+  } catch {
+    saveToLocalStorageFallback();
   }
 }
 
-/** Миграция из localStorage при первом запуске (IndexedDB пуст) */
+/** Миграция из старого одного ключа (localStorage) при первом запуске */
 export function migrateFromLocalStorage(): AiChatsData | null {
   if (typeof window === "undefined") return null;
   try {
@@ -166,13 +216,5 @@ export function migrateFromLocalStorage(): AiChatsData | null {
     return { sessions, activeId: data.activeId ?? null };
   } catch {
     return null;
-  }
-}
-
-function clearLegacyLocalStorage(): void {
-  try {
-    localStorage.removeItem(LEGACY_KEY);
-  } catch {
-    /* ignore */
   }
 }

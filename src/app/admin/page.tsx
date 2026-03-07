@@ -308,7 +308,7 @@ export default function AdminPage() {
   useEffect(() => {
     let cancelled = false;
     import("komiss/lib/ai-chats-storage").then(({ loadAiChats }) => {
-      loadAiChats().then((data) => {
+      loadAiChats(aiMode).then((data) => {
         if (cancelled) return;
         if (data && Array.isArray(data.sessions) && data.sessions.length > 0) {
           // Нормализация: сессии уже содержат mode (ai-chats-storage нормализует),
@@ -322,7 +322,7 @@ export default function AdminPage() {
             (data.activeId && normalized.find((s) => s.id === data.activeId && s.mode === aiMode)) ||
             normalized.find((s) => s.mode === aiMode) ||
             normalized[0];
-          setActiveAiSessionId(firstForMode?.id ?? null);
+          setActiveAiSessionId(firstForMode?.id ?? data.activeId ?? null);
         } else {
           const id = `ai_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
           setAiSessions([{ id, title: "Новый чат", messages: [], createdAt: Date.now(), mode: aiMode }]);
@@ -338,6 +338,7 @@ export default function AdminPage() {
       });
     });
     return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- load once on mount with initial aiMode
   }, []);
 
   // При смене режима используем отдельные чаты:
