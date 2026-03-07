@@ -71,7 +71,7 @@ try {
             }
         } catch {
             Write-Host "Failed to queue via API, falling back to direct SSH..." -ForegroundColor Yellow
-            $cmd = if ($Env -eq "prod") { "cd $RemotePath && bash scripts/deploy-from-git.sh $Branch" } else { "cd $RemotePath && bash scripts/env-deploy.sh $Env $Branch" }
+            $cmd = if ($Env -eq "prod") { "cd $RemotePath; bash scripts/deploy-from-git.sh $Branch" } else { "cd $RemotePath; bash scripts/env-deploy.sh $Env $Branch" }
             ssh $HostAlias $cmd
             if ($LASTEXITCODE -ne 0) {
                 throw "Remote deploy failed"
@@ -79,7 +79,7 @@ try {
         }
     } else {
         Write-Host "[2/2] Direct SSH (NoQueue): running deploy on $HostAlias..." -ForegroundColor Cyan
-        $cmd = if ($Env -eq "prod") { "cd $RemotePath && bash scripts/deploy-from-git.sh $Branch" } else { "cd $RemotePath && bash scripts/env-deploy.sh $Env $Branch" }
+        $cmd = if ($Env -eq "prod") { "cd $RemotePath; bash scripts/deploy-from-git.sh $Branch" } else { "cd $RemotePath; bash scripts/env-deploy.sh $Env $Branch" }
         ssh $HostAlias $cmd
         if ($LASTEXITCODE -ne 0) {
             throw "Remote deploy failed"
