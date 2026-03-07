@@ -150,11 +150,10 @@ export async function runAgent(
     const isConfirmationCode =
       metadata.mode === "dev" &&
       (/^\d{4}$/.test(trimmedPrompt) || /^(?:код\s*:?\s*|подтвержд\w*\s*:?\s*)?\d{4}\s*$/i.test(trimmedPrompt));
-    /** Короткое подтверждение вторым сообщением — не брать из кэша, иначе pending не выполнится. */
+    /** В режиме разработка короткий ответ (напр. «да») — не из кэша, иначе pending не выполнится. */
     const isShortConfirmation =
       metadata.mode === "dev" &&
-      trimmedPrompt.length <= 30 &&
-      /^(да|давай|ок|ok|подтверждаю|выполняй|согласен|согласна|поехали|го|yes|execute|confirm)\s*[.!]?$/i.test(trimmedPrompt);
+      trimmedPrompt.length <= 20;
     const forceFresh =
       disableCache ||
       /^!/.test(trimmedPrompt) ||
