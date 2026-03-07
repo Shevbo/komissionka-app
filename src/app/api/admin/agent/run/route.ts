@@ -3,11 +3,26 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "komiss/lib/auth";
 import { prisma } from "komiss/lib/prisma";
 import { isOpenRouterModel, getModelById, resolveLegacyModelId } from "komiss/lib/agent-models";
+import { getAppVersion, getAgentVersion, getTgbotVersion } from "komiss/lib/versions";
 import * as http from "node:http";
 import { Readable } from "node:stream";
 
 const AGENT_PORT = process.env.AGENT_PORT ?? "3140";
 const AGENT_API_KEY = process.env.AGENT_API_KEY;
+
+/** Убирает устаревший текст про «4 цифры» / «Подтвердите кодом» из ответа агента (если на проде ещё старый агент). */
+function normalizeAgentResult(result: string): string {
+  if (!result || (!result.includes("Подтвердите кодом") && !result.includes("4 цифр"))) return result;
+  let out = result
+    .replace(/\n*Подтвердите кодом:\s*\d{4}\s*\n*/gi, "\n\n")
+    .replace(/\n*\(Повторите 4 цифры[^)]*\)\.?\s*\n*/gi, "\n\n")
+    .replace(/\n*Повторите 4 цифры ответным сообщением[^.\n]*\.?\s*\n*/gi, "\n\n");
+  if (/Требуется подтверждение|план изменений/i.test(out) && !out.includes("Отправьте второе сообщение")) {
+    out = out.replace(/\n*Для отката[^.\n]*\.?\s*\n*/gi, "\n\n").trimEnd();
+    out += "\n\nОтправьте второе сообщение («да» или любой текст) для выполнения плана. Для отката после выполнения отправьте «откат».";
+  }
+  return out.replace(/\n{3,}/g, "\n\n").trim();
+}
 
 /** Быстрая проверка: агент слушает порт (GET /health). При ECONNREFUSED — агент не запущен. */
 function checkAgentHealth(port: string): Promise<{ ok: boolean; error?: string }> {
@@ -192,6 +207,7 @@ export async function POST(req: Request) {
     userAccount,
     chatName: typeof body.chatName === "string" ? body.chatName.trim() : undefined,
     environment: "admin",
+    footerVersions: { app: getAppVersion(), agent: getAgentVersion(), tgbot: getTgbotVersion() },
     ...(body.disableCache === true || isBacklogRequest ? { disableCache: true } : {}),
     ...(Array.isArray((body as { inputImages?: unknown }).inputImages) &&
     (body as { inputImages?: unknown[] }).inputImages!.length
@@ -280,7 +296,7 @@ export async function POST(req: Request) {
         );
       }
       return NextResponse.json({
-        result: data.result ?? "",
+        result: normalizeAgentResult(data.result ?? ""),
         steps: data.steps ?? [],
         logId: data.logId ?? null,
       });
@@ -312,7 +328,7 @@ export async function POST(req: Request) {
       if (res.statusCode === 200) {
         console.warn("[admin/agent] Ответ получен без стрима (fallback).");
         return NextResponse.json({
-          result: data.result ?? "",
+          result: normalizeAgentResult(data.result ?? ""),
           steps: data.steps ?? [],
           logId: data.logId ?? null,
         });

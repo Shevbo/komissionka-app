@@ -54,6 +54,8 @@ interface ParsedRequest {
   inputImages?: Array<{ mimeType: string; data: string }>;
   /** Отключить кэширование (agent_prompt_cache) для этого запроса. */
   disableCache?: boolean;
+  /** Версии app/agent/tgbot из приложения — для подвала. */
+  footerVersions?: { app: string; agent: string; tgbot: string };
 }
 
 function parseRequest(body: string): ParsedRequest | null {
@@ -122,6 +124,13 @@ function parseRequest(body: string): ParsedRequest | null {
       }
       const disableCache =
         "disableCache" in data && (data as { disableCache?: unknown }).disableCache === true;
+      let footerVersions: { app: string; agent: string; tgbot: string } | undefined;
+      if ("footerVersions" in data && data.footerVersions && typeof data.footerVersions === "object") {
+        const fv = data.footerVersions as { app?: unknown; agent?: unknown; tgbot?: unknown };
+        if (typeof fv.app === "string" && typeof fv.agent === "string" && typeof fv.tgbot === "string") {
+          footerVersions = { app: fv.app, agent: fv.agent, tgbot: fv.tgbot };
+        }
+      }
       return {
         prompt,
         history,
@@ -134,6 +143,7 @@ function parseRequest(body: string): ParsedRequest | null {
         environment: environment || undefined,
         inputImages,
         disableCache,
+        footerVersions,
       };
     }
   } catch {
@@ -249,6 +259,7 @@ async function handleRun(req: import("node:http").IncomingMessage, res: import("
           environment: parsed.environment,
           inputImages: parsed.inputImages,
           disableCache: parsed.disableCache,
+          footerVersions: parsed.footerVersions,
         });
         send("done", { result, logId: logId ?? null });
         console.log("[agent] runAgent done");
@@ -281,6 +292,7 @@ async function handleRun(req: import("node:http").IncomingMessage, res: import("
         chatName: parsed.chatName,
         environment: parsed.environment,
         inputImages: parsed.inputImages,
+        footerVersions: parsed.footerVersions,
       });
       console.log("[agent] runAgent done");
       safeEnd(res, 200, JSON.stringify({ result, steps: steps ?? [], logId: logId ?? null }));

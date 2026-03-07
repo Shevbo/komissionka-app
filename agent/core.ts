@@ -133,6 +133,8 @@ export interface RunAgentCoreOptions {
   inputImages?: Array<{ mimeType: string; data: string }>;
   /** Проект (например «Комиссионка»). Для подвала отчёта. */
   project?: string;
+  /** Версии app/agent/tgbot из приложения — для подвала, чтобы совпадали с админкой. */
+  footerVersions?: { app: string; agent: string; tgbot: string };
 }
 
 /** Формат префикса ответа ИИ: "Модель [Режим] объём_опыта> " — защита от путаницы с моделями. */
@@ -223,7 +225,7 @@ export async function runAgentCore(
 
   const prefix = (txt: string) => formatResponsePrefix(llmModel ?? "ИИ", mode, historyTurns.length, modelDisplayName) + txt;
 
-  const versionsAtStart = readVersions(root);
+  const versionsAtStart = options?.footerVersions ?? readVersions(root);
   const projectName = project ?? config.defaultProject;
   const displayModel = modelDisplayName?.trim() ?? (llmModel ? llmModel.replace(/^models\//, "").split(/[-/]/).map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ") : "ИИ");
 

@@ -54,6 +54,8 @@ export interface AgentOptions {
   inputImages?: Array<{ mimeType: string; data: string }>;
   /** Отключить кэширование (agent_prompt_cache) для этого запроса. */
   disableCache?: boolean;
+  /** Версии app/agent/tgbot из приложения — для подвала (совпадают с админкой). */
+  footerVersions?: { app: string; agent: string; tgbot: string };
 }
 
 export type { AgentStep } from "./core.js";
@@ -167,7 +169,7 @@ export async function runAgent(
         if (footerIdx >= 0) body = body.slice(0, footerIdx);
         const cachePrefix = `[Из кэша, совпадение ${Math.round(top.similarity)}%] Модель: ${top.entry.llm_model ?? "—"}, чат: ${top.entry.chat_name ?? "—"}, дата: ${top.entry.created_at instanceof Date ? top.entry.created_at.toISOString() : top.entry.created_at}\n\n`;
         const mode = (metadata.mode ?? "dev") as "chat" | "consult" | "dev";
-        const versions = readVersions(config.root);
+        const versions = options?.footerVersions ?? readVersions(config.root);
         const servicesStatus = getServicesStatus(config.root);
         const footer = buildReportFooter({
           model: top.entry.llm_model ?? "—",
@@ -199,6 +201,7 @@ export async function runAgent(
         modelDisplayName: options?.modelDisplayName,
         project,
         inputImages: options?.inputImages,
+        footerVersions: options?.footerVersions,
       }),
       timeoutMs
     );
