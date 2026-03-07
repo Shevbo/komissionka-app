@@ -68,16 +68,18 @@ CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 echo "Resetting to origin/$CURRENT_BRANCH..."
 git reset --hard "origin/$CURRENT_BRANCH"
 
-# Install dependencies (limit Node heap to reduce OOM; clean retry like deploy-from-git.sh)
+# Install dependencies (limit Node heap so several processes fit in RAM; clean retry)
 echo "[2/5] Installing dependencies..."
-export NODE_OPTIONS="--max-old-space-size=2048"
-if ! npm ci 2>/dev/null; then
+export NODE_OPTIONS="--max-old-space-size=1536"
+if ! npm ci --prefer-offline --no-audit 2>/dev/null; then
   echo "[env-deploy] npm ci failed, cleaning node_modules and retrying..."
   rm -rf node_modules
-  if ! npm ci 2>/dev/null; then
-    echo "[env-deploy] npm ci failed again, falling back to npm install..."
+  if ! npm ci --prefer-offline --no-audit 2>/dev/null; then
+    echo "[env-deploy] npm ci failed again, cleaning cache and trying npm install..."
+    npm cache clean --force 2>/dev/null || true
+    rm -rf node_modules
     LOG_ERROR="npm ci failed"
-    npm install
+    npm install --no-audit --no-fund --prefer-offline
     LOG_ERROR=""
   fi
 fi
@@ -87,8 +89,9 @@ echo "[3/5] Running Prisma migrations..."
 npx prisma generate
 npx prisma db push --accept-data-loss 2>/dev/null || npx prisma migrate deploy
 
-# Build
+# Build (same heap limit to avoid OOM during Next.js build)
 echo "[4/5] Building application..."
+export NODE_OPTIONS="--max-old-space-size=1536"
 npm run build
 
 # Restart PM2

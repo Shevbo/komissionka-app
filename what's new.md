@@ -25,10 +25,10 @@
 
 ### ______***UPDATE***________
 
-**08.03.2026 >** Деплой prod: Exit 134 при npm install (SIGABRT/OOM)
+**08.03.2026 >** Деплой prod: повторный Exit 134 при npm install
 
 **2.1 В приложении Комиссионка (web)**  
-В [scripts/env-deploy.sh](scripts/env-deploy.sh) при установке зависимостей: лимит памяти Node `NODE_OPTIONS=--max-old-space-size=2048`; при сбое npm ci — очистка `rm -rf node_modules`, повторный npm ci, затем при необходимости npm install (как в deploy-from-git.sh). Снижает риск падения с Exit 134 на малых VPS. app v1.14.4 → v1.14.5 (патч).
+В [scripts/env-deploy.sh](scripts/env-deploy.sh): лимит памяти снижен до 1536 MB (чтобы несколько процессов Node помещались в RAM); npm ci с `--prefer-offline --no-audit`; перед fallback на npm install — очистка кэша (`npm cache clean --force`) и повторное `rm -rf node_modules`; npm install с `--no-audit --no-fund --prefer-offline`. Для сборки явно задан тот же NODE_OPTIONS. app v1.14.5 → v1.14.6 (патч).
 
 **2.2–2.4**  
 Без изменений. agent v1.5.7, tgbot v1.1.0.
