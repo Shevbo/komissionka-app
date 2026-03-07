@@ -50,32 +50,36 @@ try {
         throw "git push origin $Branch failed"
     }
 
-    # 3) Деплой только через очередь (worker). Прямой SSH отключён.
-    Write-Host "[2/2] Adding deploy to queue via API (worker will run env-deploy.sh for $Env)..." -ForegroundColor Cyan
-    $body = @{
-        environment_name = $Env
-        operation = "deploy"
-        branch = $Branch
-        requested_by = "deploy-hoster-git.ps1"
-    } | ConvertTo-Json
-
-    $headers = @{ "Content-Type" = "application/json" }
-    if ($env:AGENT_API_KEY) { $headers["X-Agent-API-Key"] = $env:AGENT_API_KEY }
-    $response = Invoke-RestMethod -Uri "$ApiUrl/queue" -Method POST -Headers $headers -Body $body
-    if (-not $response.ok) {
-        throw "API returned error: $($response.error)"
+    # 3) Деплой: сначала очередь (worker), при 403/ошибке API — прямой SSH (без ключа не нужен).
+    $queueOk = $false
+    try {
+        Write-Host "[2/2] Adding deploy to queue via API (worker will run env-deploy.sh for $Env)..." -ForegroundColor Cyan
+        $body = @{
+            environment_name = $Env
+            operation = "deploy"
+            branch = $Branch
+            requested_by = "deploy-hoster-git.ps1"
+        } | ConvertTo-Json
+        $headers = @{ "Content-Type" = "application/json" }
+        if ($env:AGENT_API_KEY) { $headers["X-Agent-API-Key"] = $env:AGENT_API_KEY }
+        $response = Invoke-RestMethod -Uri "$ApiUrl/queue" -Method POST -Headers $headers -Body $body
+        if ($response.ok) {
+            $queueOk = $true
+            Write-Host "Deploy queued successfully. Queue ID: $($response.id). Worker obrabotaet ochered za 1-5 min." -ForegroundColor Green
+        } else {
+            throw "API error: $($response.error)"
+        }
+    } catch {
+        Write-Host "Queue API failed (403 or network), falling back to direct SSH..." -ForegroundColor Yellow
+        $cmd = if ($Env -eq "prod") { "cd $RemotePath; bash scripts/deploy-from-git.sh $Branch" } else { "cd $RemotePath; bash scripts/env-deploy.sh $Env $Branch" }
+        ssh $HostAlias $cmd
+        if ($LASTEXITCODE -ne 0) { throw "Remote deploy failed" }
     }
-    Write-Host "Deploy queued successfully. Queue ID: $($response.id). Worker obrabotaet ochered za 1-5 min (prod)." -ForegroundColor Green
 
     Write-Host "Deploy to $Env completed. Commit: $commit" -ForegroundColor Green
 }
 catch {
     Write-Host ""; Write-Host "Error in deploy-hoster-git.ps1:" $_.Exception.Message -ForegroundColor Red
-    if ($_.Exception.Message -match "403") {
-        Write-Host "Podskazka: ustanovite AGENT_API_KEY (znachenie iz .env na servere), naprimer:" -ForegroundColor Yellow
-        Write-Host '  $env:AGENT_API_KEY = "vash-klyuch"' -ForegroundColor Gray
-        Write-Host "Ili zapuskajte deploy iz vkladki Deploy v adminke (knopka Deploy u sredy)." -ForegroundColor Yellow
-    }
     exit 1
 }
 finally {
