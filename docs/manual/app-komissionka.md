@@ -262,12 +262,14 @@ npx prisma migrate dev      # dev (не используется на серве
 
 ### 7.1 Условная схема: от разработки до внедрения в прод (git-деплой)
 
+**Порядок деплоя:** деплой выполняется **через очередь и worker** (PM2: `deploy-worker`). Скрипт ставит задачу в API `/api/deploy/queue`; worker запускает `scripts/env-deploy.sh <среда> <ветка>` (для prod — в `~/komissionka`).
+
 ```
-[Разработка] → [Коммит] → [git push origin main] → [deploy-hoster-git.ps1] → [deploy-from-git.sh на сервере]
-     │              │                │                      │                          │
-     │              │                │                      │                          └─ pm2 restart komissionka agent bot
-     │              │                │                      └─ git fetch/reset, npm ci/npm install, prisma migrate deploy, next build
-     │              │                └─ version.json, what's new.md
+[Разработка] → [Коммит] → [git push] → [deploy-hoster-git.ps1] → [POST /api/deploy/queue] → [deploy-worker]
+     │              │            │                │                        │                        │
+     │              │            │                │                        │                        └─ env-deploy.sh prod main → pm2 restart
+     │              │            │                │                        └─ (fetch, reset, npm ci, prisma, build)
+     │              │            │                └─ version.json, what's new.md
      └─ src/, prisma/, public/ — изменение кода
 ```
 
@@ -277,13 +279,8 @@ npx prisma migrate dev      # dev (не используется на серве
 2. **Версионирование** — обновление `version.json` (app), блок UPDATE в корневом `what's new.md`.
 3. **Коммит + push** — `git commit` и `git push origin main` из каталога `c:\komissionka`.
 4. **Git-деплой** — на локальной машине: `.\scripts\deploy-hoster-git.ps1 -Branch main`.  
-   Скрипт делает `git push origin main` и по SSH запускает на сервере `scripts/deploy-from-git.sh main`:
-   - `git fetch origin main && git reset --hard origin/main` в `~/komissionka`;
-   - `npm ci` (при ошибках — fallback на `npm install`);
-   - `npx prisma generate && npx prisma migrate deploy`;
-   - `npm run build` (Next.js);
-   - `pm2 restart komissionka agent bot`.
-5. **Старый скрипт `deploy-hoster.ps1`** — используется **только как резервный вариант** (scp/rsync) при проблемах с git-деплоем и в нормальном режиме не применяется.
+   Скрипт делает `git push origin main` и **добавляет задачу в очередь** (POST `/api/deploy/queue`). Задачу обрабатывает **deploy-worker**: запускает `scripts/env-deploy.sh prod main` в `~/komissionka` (fetch, reset, npm ci, prisma, build, pm2 restart). Правки на проде появляются после обработки очереди (1–5 мин). Прямой SSH без очереди: `-NoQueue`.
+5. **Старый скрипт `deploy-hoster.ps1`** — только как резервный вариант (scp/rsync) при проблемах с git-деплоем.
 
 ### 7.2 Месторасположение изменённого кода (Dev)
 

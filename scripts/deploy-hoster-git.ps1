@@ -6,8 +6,8 @@ param(
     [switch]$AllowDirty = $false,
     # Игнорируем изменения/неотслеживаемые файлы Cursor (.cursor/...), чтобы они не блокировали деплой.
     [switch]$IgnoreCursor = $true,
-    # Использовать API очереди вместо прямого SSH (для тестовых сред)
-    [switch]$UseQueue = $false
+    # По умолчанию деплой через очередь (worker). -NoQueue — прямой SSH (резерв).
+    [switch]$NoQueue = $false
 )
 
 $HostAlias = "hoster"
@@ -52,9 +52,9 @@ try {
         throw "git push origin $Branch failed"
     }
 
-    # 3) Деплой — через API очереди или прямой SSH
-    if ($UseQueue -or $Env -ne "prod") {
-        Write-Host "[2/2] Adding deploy to queue via API ($Env)..." -ForegroundColor Cyan
+    # 3) Деплой — по умолчанию через очередь (deploy-worker), иначе прямой SSH
+    if (-not $NoQueue) {
+        Write-Host "[2/2] Adding deploy to queue via API (worker will run env-deploy.sh for $Env)..." -ForegroundColor Cyan
         $body = @{
             environment_name = $Env
             operation = "deploy"
@@ -65,24 +65,24 @@ try {
         try {
             $response = Invoke-RestMethod -Uri "$ApiUrl/queue" -Method POST -ContentType "application/json" -Body $body
             if ($response.ok) {
-                Write-Host "Deploy queued successfully. Queue ID: $($response.id)" -ForegroundColor Green
+                Write-Host "Deploy queued successfully. Queue ID: $($response.id). Worker обработает в течение ~1–5 мин." -ForegroundColor Green
             } else {
                 throw "API returned error: $($response.error)"
             }
         } catch {
             Write-Host "Failed to queue via API, falling back to direct SSH..." -ForegroundColor Yellow
-            $cmd = "cd $RemotePath && bash scripts/env-deploy.sh $Env $Branch"
+            $cmd = if ($Env -eq "prod") { "cd $RemotePath && bash scripts/deploy-from-git.sh $Branch" } else { "cd $RemotePath && bash scripts/env-deploy.sh $Env $Branch" }
             ssh $HostAlias $cmd
             if ($LASTEXITCODE -ne 0) {
-                throw "Remote env-deploy.sh failed"
+                throw "Remote deploy failed"
             }
         }
     } else {
-        Write-Host "[2/2] Running deploy-from-git.sh on $HostAlias (prod)..." -ForegroundColor Cyan
-        $cmd = "cd $RemotePath && bash scripts/deploy-from-git.sh $Branch"
+        Write-Host "[2/2] Direct SSH (NoQueue): running deploy on $HostAlias..." -ForegroundColor Cyan
+        $cmd = if ($Env -eq "prod") { "cd $RemotePath && bash scripts/deploy-from-git.sh $Branch" } else { "cd $RemotePath && bash scripts/env-deploy.sh $Env $Branch" }
         ssh $HostAlias $cmd
         if ($LASTEXITCODE -ne 0) {
-            throw "Remote deploy-from-git.sh failed"
+            throw "Remote deploy failed"
         }
     }
 
