@@ -71,7 +71,8 @@ export async function GET(request: Request) {
 
   const withVersions = await Promise.all(
     environments.map(async (env) => {
-      const version = env.status === "active" ? await fetchVersionFromPort(env.port_app) : null;
+      const version = await fetchVersionFromPort(env.port_app);
+      const resolvedStatus = version ? "active" : env.status;
       return {
         id: env.id,
         name: env.name,
@@ -81,7 +82,7 @@ export async function GET(request: Request) {
         directory: env.directory,
         db_name: env.db_name,
         branch: env.branch,
-        status: env.status,
+        status: resolvedStatus,
         is_prod: env.is_prod,
         created_at: env.created_at.toISOString(),
         updated_at: env.updated_at.toISOString(),
