@@ -131,6 +131,20 @@ type BacklogItem = {
 const BACKLOG_SPRINT_STATUSES = ["формируется", "выполняется", "реализован", "архив"] as const;
 const BACKLOG_TASK_STATUSES = ["не начато", "выполняется", "тестируется", "сделано", "отказ"] as const;
 
+/** Убирает устаревший текст про «4 цифры» / «Подтвердите кодом» (если агент на проде ещё старый). */
+function normalizeAgentResultForDisplay(result: string): string {
+  if (!result || (!result.includes("Подтвердите кодом") && !result.includes("4 цифр"))) return result;
+  let out = result
+    .replace(/\n*Подтвердите кодом:\s*\d{4}\s*\n*/gi, "\n\n")
+    .replace(/\n*\(Повторите 4 цифры[^)]*\)\.?\s*\n*/gi, "\n\n")
+    .replace(/\n*Повторите 4 цифры ответным сообщением[^.\n]*\.?\s*\n*/gi, "\n\n");
+  if (/Требуется подтверждение|план изменений/i.test(out) && !out.includes("Отправьте второе сообщение")) {
+    out = out.replace(/\n*Для отката[^.\n]*\.?\s*\n*/gi, "\n\n").trimEnd();
+    out += "\n\nОтправьте второе сообщение («да» или любой текст) для выполнения плана. Для отката после выполнения отправьте «откат».";
+  }
+  return out.replace(/\n{3,}/g, "\n\n").trim();
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const { user: currentUser, userRole, loading: authLoading, profile, refreshProfile } = useAuth();
@@ -2719,7 +2733,7 @@ export default function AdminPage() {
                                         } else if (eventType === "done") {
                                           const d = data as { result?: string; logId?: string | null };
                                           setAiLastLogId(d.logId ?? null);
-                                          setAiMessagesForCurrentSession((prev) => [...prev, { role: "assistant", content: d.result ?? "", timestamp: Date.now() }]);
+                                          setAiMessagesForCurrentSession((prev) => [...prev, { role: "assistant", content: normalizeAgentResultForDisplay(d.result ?? ""), timestamp: Date.now() }]);
                                         } else if (eventType === "error") {
                                           const d = data as { error?: string };
                                           setAiMessagesForCurrentSession((prev) => [...prev, { role: "assistant", content: `Ошибка: ${d.error ?? "Unknown"}`, timestamp: Date.now() }]);
@@ -2739,7 +2753,7 @@ export default function AdminPage() {
                                 }
                                 setAiLastSteps(data.steps ?? []);
                                 setAiLastLogId(data.logId ?? null);
-                                setAiMessagesForCurrentSession((prev) => [...prev, { role: "assistant", content: data.result ?? "", timestamp: Date.now() }]);
+                                setAiMessagesForCurrentSession((prev) => [...prev, { role: "assistant", content: normalizeAgentResultForDisplay(data.result ?? ""), timestamp: Date.now() }]);
                               }
                             } catch (err) {
                               if (err instanceof DOMException && err.name === "AbortError") {
