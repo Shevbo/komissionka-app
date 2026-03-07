@@ -228,7 +228,7 @@ model deploy_queue {
   @@index([created_at])
 }
 
-// Журнал операций деплоя
+// Журнал операций деплоя (очередь + прямые запуски скриптов)
 model deploy_log {
   id              String   @id @default(uuid()) @db.Uuid
   queue_id        String?  @db.Uuid
@@ -239,6 +239,10 @@ model deploy_log {
   error           String?  @db.Text
   duration_ms     Int?     @db.Integer
   created_at      DateTime @default(now()) @db.Timestamptz(6)
+  // Источник: queue (worker по очереди) или script (прямой запуск deploy-from-git.sh / env-deploy.sh)
+  source          String?  @db.VarChar(32)
+  // Кто инициировал: admin-ui, deploy-hoster-git.ps1, cursor, agent, deploy-from-git.sh и т.д.
+  requested_by    String?  @db.VarChar(255)
 
   queue           deploy_queue? @relation(fields: [queue_id], references: [id], onDelete: SetNull)
   environment     deploy_environments? @relation(fields: [environment_id], references: [id], onDelete: SetNull)

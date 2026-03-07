@@ -6,6 +6,9 @@ set -euo pipefail
 
 ENV_NAME="${1:-}"
 BRANCH="${2:-}"
+DEPLOY_START_TS=$(date +%s)
+LOG_RESULT="completed"
+LOG_ERROR=""
 
 if [[ -z "$ENV_NAME" ]]; then
   echo "Usage: env-deploy.sh <name> [branch]"
@@ -21,6 +24,30 @@ fi
 if [[ ! -d "$ENV_DIR" ]]; then
   echo "ERROR: Directory $ENV_DIR does not exist"
   exit 1
+fi
+
+log_append() {
+  local status="$1"
+  local err="$2"
+  local duration_ms=$(( ( $(date +%s) - DEPLOY_START_TS ) * 1000 ))
+  local out_str="Deploy $status. Env: $ENV_NAME"
+  [[ -n "$err" ]] && out_str="$out_str. $err"
+  out_esc=$(printf '%s' "$out_str" | sed 's/\\/\\\\/g; s/"/\\"/g')
+  err_esc=$(printf '%s' "$err" | sed 's/\\/\\\\/g; s/"/\\"/g')
+  if [[ -n "${DEPLOY_LOG_SECRET:-}" ]]; then
+    curl -s -X POST "http://127.0.0.1:3000/api/deploy/log/append" \
+      -H "x-deploy-log-secret: $DEPLOY_LOG_SECRET" \
+      -H "Content-Type: application/json" \
+      -d "{\"operation\":\"deploy\",\"environment_name\":\"$ENV_NAME\",\"status\":\"$status\",\"output\":\"$out_esc\",\"error\":\"$err_esc\",\"duration_ms\":$duration_ms,\"requested_by\":\"env-deploy.sh\"}" \
+      --connect-timeout 2 --max-time 5 || true
+  fi
+}
+trap 'log_append "$LOG_RESULT" "$LOG_ERROR"' EXIT
+trap 'LOG_RESULT=failed; LOG_ERROR="Deploy failed"' ERR
+
+# Load DEPLOY_LOG_SECRET from prod .env (app runs on prod)
+if [[ -f "$HOME/komissionka/.env" ]]; then
+  export DEPLOY_LOG_SECRET=$(grep -E '^DEPLOY_LOG_SECRET=' "$HOME/komissionka/.env" 2>/dev/null | cut -d= -f2- | head -1) || true
 fi
 
 cd "$ENV_DIR"
@@ -43,7 +70,7 @@ git reset --hard "origin/$CURRENT_BRANCH"
 
 # Install dependencies
 echo "[2/5] Installing dependencies..."
-npm ci 2>/dev/null || npm install
+npm ci 2>/dev/null || { LOG_ERROR="npm ci failed"; npm install; LOG_ERROR=""; }
 
 # Run Prisma
 echo "[3/5] Running Prisma migrations..."

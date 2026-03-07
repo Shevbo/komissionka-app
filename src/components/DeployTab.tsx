@@ -67,6 +67,7 @@ interface LogEntry {
   error: string | null;
   duration_ms: number | null;
   requested_by: string | null;
+  source?: string;
   created_at: string;
 }
 
@@ -76,6 +77,7 @@ export function DeployTab() {
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [allLogs, setAllLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [accessError, setAccessError] = useState<string | null>(null);
   const [lastFetch, setLastFetch] = useState<Date | null>(null);
@@ -88,13 +90,14 @@ export function DeployTab() {
   const fetchData = useCallback(async () => {
     setAccessError(null);
     try {
-      const [envRes, queueRes, logRes] = await Promise.all([
+      const [envRes, queueRes, logRes, allLogRes] = await Promise.all([
         fetch("/api/deploy/environments", fetchOpts),
         fetch("/api/deploy/queue?limit=20", fetchOpts),
         fetch("/api/deploy/log?limit=30", fetchOpts),
+        fetch("/api/deploy/log?limit=100", fetchOpts),
       ]);
 
-      if (envRes.status === 403 || queueRes.status === 403 || logRes.status === 403) {
+      if (envRes.status === 403 || queueRes.status === 403 || logRes.status === 403 || allLogRes.status === 403) {
         setAccessError("Нет доступа к API деплоя. Войдите в админку как администратор.");
       }
 
@@ -112,6 +115,10 @@ export function DeployTab() {
       if (logRes.ok) {
         const data = await logRes.json();
         setLogs(data.data || []);
+      }
+      if (allLogRes.ok) {
+        const data = await allLogRes.json();
+        setAllLogs(data.data || []);
       }
       setLastFetch(new Date());
     } catch (err) {
@@ -455,7 +462,71 @@ export function DeployTab() {
         </CardContent>
       </Card>
 
-      {/* Log Section */}
+      {/* All operations log — queue + script runs (no gaps) */}
+      <Card>
+        <CardHeader className="pb-2">
+          <h3 className="text-lg font-semibold">Журнал всех операций</h3>
+          <p className="text-xs text-muted-foreground font-normal mt-1">
+            Все операции worker: по очереди (админка, Cursor, агент ИИ) и прямые запуски скриптов (deploy-from-git.sh, env-deploy.sh). Без исключений и пропусков. Последние 100 записей.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Дата</TableHead>
+                <TableHead>Среда</TableHead>
+                <TableHead>Операция</TableHead>
+                <TableHead>Статус</TableHead>
+                <TableHead>Источник</TableHead>
+                <TableHead>Кто запросил</TableHead>
+                <TableHead>Длительность</TableHead>
+                <TableHead>Действия</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {allLogs.map((log) => (
+                <TableRow key={log.id}>
+                  <TableCell className="whitespace-nowrap">{formatDate(log.created_at)}</TableCell>
+                  <TableCell>{log.environment_name ?? "—"}</TableCell>
+                  <TableCell>{log.operation}</TableCell>
+                  <TableCell>{getStatusBadge(log.status)}</TableCell>
+                  <TableCell>
+                    <span className={log.source === "script" ? "text-amber-600 dark:text-amber-400" : ""}>
+                      {log.source === "script" ? "скрипт" : "очередь"}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-xs text-gray-600 dark:text-gray-400 max-w-[120px] truncate" title={log.requested_by ?? ""}>
+                    {log.requested_by ?? "—"}
+                  </TableCell>
+                  <TableCell>
+                    {log.duration_ms != null ? `${(log.duration_ms / 1000).toFixed(1)}s` : "—"}
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowLogDialog(log)}
+                      title="Подробнее"
+                    >
+                      Лог
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {allLogs.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center text-gray-500">
+                    Нет записей
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Log Section (short: last 30) */}
       <Card>
         <CardHeader className="pb-2">
           <h3 className="text-lg font-semibold">Журнал операций</h3>

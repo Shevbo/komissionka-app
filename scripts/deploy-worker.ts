@@ -35,6 +35,7 @@ interface QueueItem {
   source_env_id: string | null;
   branch: string | null;
   status: string;
+  requested_by: string | null;
   environment: {
     name: string;
     port_app: number;
@@ -44,7 +45,16 @@ interface QueueItem {
   };
 }
 
-async function log(queueId: string | null, envId: string | null, operation: string, status: string, output?: string, error?: string, durationMs?: number) {
+async function log(
+  queueId: string | null,
+  envId: string | null,
+  operation: string,
+  status: string,
+  output?: string,
+  error?: string,
+  durationMs?: number,
+  requestedBy?: string | null
+) {
   await prisma.deploy_log.create({
     data: {
       queue_id: queueId,
@@ -54,6 +64,8 @@ async function log(queueId: string | null, envId: string | null, operation: stri
       output: output?.slice(0, 50000),
       error: error?.slice(0, 10000),
       duration_ms: durationMs,
+      source: "queue",
+      requested_by: requestedBy ?? null,
     },
   });
 }
@@ -150,7 +162,7 @@ async function processQueueItem(item: QueueItem): Promise<void> {
       data: { status: "running", started_at: new Date() },
     });
 
-    await log(item.id, item.environment_id, item.operation, "running", `Starting ${item.operation}...`);
+    await log(item.id, item.environment_id, item.operation, "running", `Starting ${item.operation}...`, undefined, undefined, item.requested_by);
 
     switch (item.operation) {
       case "create":
@@ -176,7 +188,7 @@ async function processQueueItem(item: QueueItem): Promise<void> {
       data: { status: "completed", completed_at: new Date() },
     });
 
-    await log(item.id, item.environment_id, item.operation, "completed", `${item.operation} completed successfully`, undefined, duration);
+    await log(item.id, item.environment_id, item.operation, "completed", `${item.operation} completed successfully`, undefined, duration, item.requested_by);
   } catch (error) {
     const duration = Date.now() - startTime;
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -195,7 +207,7 @@ async function processQueueItem(item: QueueItem): Promise<void> {
       }).catch(() => {});
     }
 
-    await log(item.id, item.environment_id, item.operation, "failed", undefined, errorMessage, duration);
+    await log(item.id, item.environment_id, item.operation, "failed", undefined, errorMessage, duration, item.requested_by);
   }
 }
 
