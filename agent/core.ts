@@ -14,7 +14,7 @@ import { getSystemPrompt, getSystemPromptForChat } from "./llm/system-prompt.js"
 import { getConfig } from "./config.js";
 import { parseModelIdWithModality, shouldRequestImageOutput, isOpenRouterModelId } from "./lib/model-utils.js";
 import { TOOLS_FOR_LLM, TOOLS_CHAT, TOOLS_CONSULT, executeTool, RUN_COMMAND_DISALLOWED_PREFIX } from "./tools/index.js";
-import { consumePending, generateCode, setPending, refreshPendingShown, type Pending, type PendingApproval, type PendingVerification } from "./approval-store.js";
+import { setPending, getAndConsumePendingApproval, getAndConsumePendingVerification, PENDING_APPROVAL_KEY, PENDING_VERIFICATION_KEY, type PendingApproval, type PendingVerification } from "./approval-store.js";
 import { buildReportFooter, readVersions, countWordsForFooter } from "./lib/report-footer.js";
 import { getServicesStatus } from "./lib/services-status.js";
 
@@ -283,10 +283,6 @@ export async function runAgentCore(
     msgs?: Array<{ role: string; content: string | unknown; tool_calls?: unknown }>,
     servicesStatusOverride?: { app: boolean; agent: boolean; bot: boolean }
   ): RunAgentCoreResult {
-    if (mode === "dev") {
-      const codeMatch = msg.match(/(?:подтвердите\s+кодом|код\s*подтверждения)\s*:\s*(\d{4})/i);
-      if (codeMatch) refreshPendingShown(codeMatch[1]!);
-    }
     const inputOverride = msgs && msgs.length > 0 ? computeInputSize(msgs) : undefined;
     if (mode === "dev") {
       const inputSerialized = msgs && msgs.length > 0
@@ -314,56 +310,29 @@ export async function runAgentCore(
     onStep?.(step);
   };
 
-  // Режим «Разработка»: обработка кода подтверждения или отката
+  // Режим «Разработка»: подтверждение — вторым сообщением; откат — командой «откат»
   if (mode === "dev") {
     const trimmedPrompt = prompt.trim();
-    const otkatMatch = /^откат\s+(\d{4})\s*$/i.exec(trimmedPrompt);
-    if (otkatMatch) {
-      const code = otkatMatch[1]!;
-      const cr = consumePending(code);
-      if (!cr) return makeReturn("Код не найден. Откат невозможен.");
+    if (/^откат\s*$/i.test(trimmedPrompt)) {
+      const cr = getAndConsumePendingVerification();
+      if (!cr) return makeReturn("Нет ожидающего отката. Сначала выполните план и дождитесь результата.");
       const { pending } = cr;
-      if (pending.kind === "verification") {
-        const pv = pending as PendingVerification;
-        if (!pv.backupId) return makeReturn("Откат невозможен: нет резервной копии.");
-        appendLog(`Откат по запросу администратора, backupId=${pv.backupId}`);
-        const restoreCmd = `npx tsx scripts/agent-backup.ts restore ${pv.backupId}`;
-        const restoreRes = await executeTool("run_command", { command: restoreCmd });
-        const restored = restoreRes.includes('"ok":true') && restoreRes.includes("restored");
-        const msg = restored
-          ? "Откат выполнен. Репозиторий восстановлен из резервной копии."
-          : "Ошибка отката: " + restoreRes.slice(0, 200);
-        return makeReturn(msg);
-      }
-      return makeReturn("Код не для отката (ожидается код верификации).");
+      if (pending.kind !== "verification") return makeReturn("Откат невозможен.");
+      const pv = pending as PendingVerification;
+      if (!pv.backupId) return makeReturn("Откат невозможен: нет резервной копии.");
+      appendLog(`Откат по запросу администратора, backupId=${pv.backupId}`);
+      const restoreCmd = `npx tsx scripts/agent-backup.ts restore ${pv.backupId}`;
+      const restoreRes = await executeTool("run_command", { command: restoreCmd });
+      const restored = restoreRes.includes('"ok":true') && restoreRes.includes("restored");
+      const msg = restored
+        ? "Откат выполнен. Репозиторий восстановлен из резервной копии."
+        : "Ошибка отката: " + restoreRes.slice(0, 200);
+      return makeReturn(msg);
     }
-    const codeMatch =
-      /^\d{4}$/.test(trimmedPrompt)
-        ? trimmedPrompt
-        : /(?:код\s*:?\s*|подтвержд\w*\s*:?\s*)?(\d{4})\s*$/i.exec(trimmedPrompt)?.[1];
-    if (codeMatch) {
-      let cr: { pending: Pending; expired: boolean } | undefined;
-      try {
-        cr = consumePending(codeMatch);
-      } catch (loadErr) {
-        const msg = loadErr instanceof Error ? loadErr.message : String(loadErr);
-        appendLog(`Ошибка при загрузке кода подтверждения: ${msg}`);
-        return makeReturn("Ошибка при проверке кода подтверждения. Повторите запрос или задайте новый план.\n\nДетали: " + msg);
-      }
-      if (!cr) return makeReturn("Неверный или несуществующий код подтверждения.");
+    const cr = getAndConsumePendingApproval();
+    if (cr) {
       const { pending, expired } = cr;
-      if (expired && pending.kind === "verification") {
-        appendLog("Код подтверждения истёк — выполняю откат");
-        const pv = pending as PendingVerification;
-        if (pv.backupId && pv.backupId.length > 0) {
-          const restoreCmd = `npx tsx scripts/agent-backup.ts restore ${pv.backupId}`;
-          await executeTool("run_command", { command: restoreCmd });
-        }
-        return makeReturn("Время подтверждения истекло (30 мин). Выполнен автоматический откат из резервной копии.");
-      }
-      if (expired && pending.kind === "approval") {
-        return makeReturn("Время подтверждения истекло. Повторите запрос для нового кода.");
-      }
+      if (expired) return makeReturn("Время подтверждения истекло. Повторите запрос для нового плана.");
       if (pending.kind === "approval") {
         const pa = pending as PendingApproval;
         const toolCalls = Array.isArray(pa.toolCalls) ? pa.toolCalls : [];
@@ -404,10 +373,9 @@ export async function runAgentCore(
             });
           }
 
-          const verifyCode = generateCode();
-          setPending(verifyCode, {
+          setPending(PENDING_VERIFICATION_KEY, {
             kind: "verification",
-            code: verifyCode,
+            code: PENDING_VERIFICATION_KEY,
             backupId,
             executionResult: execResults.join("\n"),
             createdAt: Date.now(),
@@ -415,12 +383,7 @@ export async function runAgentCore(
 
           hadModifications = true;
           const msg =
-            "Действия выполнены. Проверьте результат.\n\n" +
-            "Чтобы принять изменения — отправьте код: " +
-            verifyCode +
-            "\n\nЧтобы откатить — отправьте: откат " +
-            verifyCode +
-            "\n\nВремя на ответ: 30 минут. По истечении времени при следующем запросе код будет считаться истёкшим.";
+            "Действия выполнены. Проверьте результат.\n\nДля отката отправьте сообщение «откат».";
           return makeReturn(msg, true);
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err);
@@ -429,12 +392,6 @@ export async function runAgentCore(
             "Ошибка при выполнении подтверждённого плана. Действия отменены.\n\nДетали: " + errMsg + "\n\nПроверьте логи агента и повторите запрос с новым планом."
           );
         }
-      }
-      if (pending.kind === "verification") {
-        const pv = pending as PendingVerification;
-        hadModifications = true;
-        const msg = "Изменения приняты.\n\n" + pv.executionResult;
-        return makeReturn(msg, true);
       }
     }
   }
@@ -610,10 +567,9 @@ export async function runAgentCore(
         }
         if (filesToBackup.length === 0) filesToBackup.push("prisma/schema.prisma");
 
-        const code = generateCode();
-        setPending(code, {
+        setPending(PENDING_APPROVAL_KEY, {
           kind: "approval",
-          code,
+          code: PENDING_APPROVAL_KEY,
           actions,
           toolCalls: modifyingCalls.map((tc) => ({
             id: tc.id,
@@ -630,9 +586,7 @@ export async function runAgentCore(
           "⚠️ Требуется подтверждение администратора.\n\n" +
           "План изменений (выполнится целиком после подтверждения):\n\n" +
           actionsList +
-          "\n\nПодтвердите кодом: " +
-          code +
-          "\n\n(Повторите 4 цифры ответным сообщением. После выполнения — проверьте результат и примите кодом или откатите.)";
+          "\n\nОтправьте второе сообщение («да» или любой текст) для выполнения плана. Для отката после выполнения отправьте «откат».";
         return makeReturn(msg);
       }
 

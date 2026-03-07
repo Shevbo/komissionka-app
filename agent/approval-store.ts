@@ -167,10 +167,9 @@ function cleanupExpired(): void {
   if (changed) saveStore();
 }
 
-/** Генерирует 4-значный код (1000–9999). */
-export function generateCode(): string {
-  return String(1000 + Math.floor(Math.random() * 9000));
-}
+/** Фиксированные ключи: подтверждение — вторым сообщением, откат — по команде «откат». */
+export const PENDING_APPROVAL_KEY = "confirm";
+export const PENDING_VERIFICATION_KEY = "verify";
 
 /** Сохраняет ожидание подтверждения (в память и в файл). При создании lastShownAt = now. */
 export function setPending(code: string, pending: Pending): void {
@@ -220,4 +219,14 @@ export function hasPending(code: string): boolean {
     return false;
   }
   return true;
+}
+
+/** Получает и удаляет единственный pending подтверждения (второе сообщение = подтверждение). */
+export function getAndConsumePendingApproval(): ConsumeResult | undefined {
+  return consumePending(PENDING_APPROVAL_KEY);
+}
+
+/** Получает и удаляет единственный pending верификации (для отката по команде «откат»). */
+export function getAndConsumePendingVerification(): ConsumeResult | undefined {
+  return consumePending(PENDING_VERIFICATION_KEY);
 }
