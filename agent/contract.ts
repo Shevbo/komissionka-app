@@ -150,12 +150,18 @@ export async function runAgent(
     const isConfirmationCode =
       metadata.mode === "dev" &&
       (/^\d{4}$/.test(trimmedPrompt) || /^(?:код\s*:?\s*|подтвержд\w*\s*:?\s*)?\d{4}\s*$/i.test(trimmedPrompt));
+    /** Короткое подтверждение вторым сообщением — не брать из кэша, иначе pending не выполнится. */
+    const isShortConfirmation =
+      metadata.mode === "dev" &&
+      trimmedPrompt.length <= 30 &&
+      /^(да|давай|ок|ok|подтверждаю|выполняй|согласен|согласна|поехали|го|yes|execute|confirm)\s*[.!]?$/i.test(trimmedPrompt);
     const forceFresh =
       disableCache ||
       /^!/.test(trimmedPrompt) ||
       /\bforce\b/i.test(trimmedPrompt) ||
       isConfirmationCode ||
-      (metadata.mode === "dev" && /^откат\s+\d{4}\s*$/i.test(trimmedPrompt));
+      isShortConfirmation ||
+      (metadata.mode === "dev" && /^откат\s*$/i.test(trimmedPrompt));
     const promptForLlm = forceFresh ? trimmedPrompt.replace(/^!\s*/, "").trim() : trimmedPrompt;
 
     if (!forceFresh && !disableCache && config.cacheSimilarityThreshold > 0) {
