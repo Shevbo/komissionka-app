@@ -2603,7 +2603,7 @@ export default function AdminPage() {
                         <Button
                           type="button"
                           variant="outline"
-                          size="xs"
+                          size="sm"
                           disabled={statusDumping}
                           onClick={async () => {
                             setStatusDumping(true);
