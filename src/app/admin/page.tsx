@@ -252,6 +252,8 @@ export default function AdminPage() {
     success?: boolean;
   }>>([]);
   const [aiLastLogId, setAiLastLogId] = useState<string | null>(null);
+  const [statusDumping, setStatusDumping] = useState(false);
+  const [statusDumpResult, setStatusDumpResult] = useState<string | null>(null);
   type AiMode = "chat" | "consult" | "dev";
   const [aiMode, setAiMode] = useState<AiMode>(() => {
     if (typeof window === "undefined") return "consult";
@@ -2586,12 +2588,57 @@ export default function AdminPage() {
                         </div>
                       ))}
                     </div>
-                    {aiLastLogId && (
-                      <a href={`/api/admin/agent/log?logId=${encodeURIComponent(aiLastLogId)}`} target="_blank" rel="noopener noreferrer" className="mt-2 block shrink-0 text-xs text-primary hover:underline">
-                        Весь путь рассуждений →
-                      </a>
-                    )}
+                    <div className="mt-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      {aiLastLogId && (
+                        <a
+                          href={`/api/admin/agent/log?logId=${encodeURIComponent(aiLastLogId)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block shrink-0 text-xs text-primary hover:underline"
+                        >
+                          Весь путь рассуждений →
+                        </a>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="xs"
+                          disabled={statusDumping}
+                          onClick={async () => {
+                            setStatusDumping(true);
+                            setStatusDumpResult(null);
+                            try {
+                              const res = await fetch("/api/admin/status-dump", { method: "POST" });
+                              const data = await res.json();
+                              if (!res.ok || !data?.ok) {
+                                setStatusDumpResult(
+                                  `Ошибка дампа: ${data?.error || res.status + " " + res.statusText}`,
+                                );
+                              } else {
+                                setStatusDumpResult(
+                                  `Файл: ${data.path || "не распознан"}\n\n${data.stdout || ""}`.trim(),
+                                );
+                              }
+                            } catch (e) {
+                              setStatusDumpResult(
+                                `Ошибка запроса: ${e instanceof Error ? e.message : String(e)}`,
+                              );
+                            } finally {
+                              setStatusDumping(false);
+                            }
+                          }}
+                        >
+                          {statusDumping ? "Дамп состояния…" : "ДАМП СОСТОЯНИЯ"}
+                        </Button>
+                      </div>
+                    </div>
                   </div>
+                  {statusDumpResult && (
+                    <pre className="mt-2 max-h-64 overflow-auto rounded border bg-muted p-2 text-xs whitespace-pre-wrap">
+                      {statusDumpResult}
+                    </pre>
+                  )}
                 </div>
                 {/* Чат с ИИ — на смартфоне сверху (приоритет), на десктопе справа */}
                 <div className="order-1 flex min-w-0 flex-1 flex-col gap-4 md:order-2">
