@@ -434,18 +434,18 @@ export default function AdminPage() {
     [activeAiSessionId]
   );
 
-  /** После ошибки агента запрашивает /api/admin/agent/diagnose и добавляет в чат вывод pm2 list, curl health, pm2 logs. */
+  /** После ошибки агента запрашивает /api/admin/agent/diagnose, но в чат кладёт только короткую подсказку — без технического лога. */
   const appendAgentDiagnoseToChat = useCallback(() => {
     fetch("/api/admin/agent/diagnose", { credentials: "include" })
       .then((r) => r.json())
-      .then((data: { ok?: boolean; output?: string }) => {
-        const output = typeof data.output === "string" ? data.output.trim() : "";
-        if (data.ok && output) {
+      .then((data: { ok?: boolean }) => {
+        if (data.ok) {
           setAiMessagesForCurrentSession((prev) => [
             ...prev,
             {
               role: "assistant",
-              content: "Результаты выполнения на сервере:\n\n" + output,
+              content:
+                "Агент вернул ошибку при выполнении запроса.\n\nДля диагностики просто нажмите кнопку «ДАМП СОСТОЯНИЯ» слева и пришлите путь к созданному файлу в этот чат — я по нему восстановлю всю техническую картину.",
               timestamp: Date.now(),
             },
           ]);
