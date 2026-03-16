@@ -362,9 +362,21 @@ function main(): void {
     }
   });
 
+  server.on("error", (err: NodeJS.ErrnoException) => {
+    if (err && err.code === "EADDRINUSE") {
+      console.error(
+        `[agent] Port ${port} is already in use (EADDRINUSE). Exiting to avoid restart loop. ` +
+          "Убедитесь, что не запущен второй экземпляр агента или другой процесс, слушающий этот порт.",
+      );
+      process.exit(1);
+    }
+    console.error("[agent] HTTP server error:", err);
+    process.exit(1);
+  });
+
   server.listen(port, () => {
     console.log(`[agent] HTTP server listening on port ${port}`);
-    console.log(`[agent] POST /run { "prompt": "...", "history": [...] } → result`);
+    console.log(`[agent] POST /run { "prompt": \"...\", \"history\": [...] } → result`);
     console.log(`[agent] GET http://127.0.0.1:${port}/health — проверка доступности`);
     if (config.apiKey) {
       console.log("[agent] API key required (Authorization: Bearer <key> or X-API-Key)");

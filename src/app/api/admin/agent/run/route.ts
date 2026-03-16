@@ -231,7 +231,8 @@ export async function POST(req: Request) {
     "Content-Length": Buffer.byteLength(bodyStr, "utf-8"),
   };
 
-  const isRetryable = (msg: string) => /socket hang up|ECONNRESET|EPIPE|ECONNREFUSED/i.test(msg);
+  const isRetryable = (msg: string) =>
+    /socket hang up|ECONNRESET|EPIPE|ECONNREFUSED|EADDRINUSE/i.test(msg);
   let lastError: unknown = null;
 
   try {
