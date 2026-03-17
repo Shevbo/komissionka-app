@@ -77,6 +77,19 @@ export const ALLOWED_COMMANDS_READABLE = getAllowedCommandsReadable();
 /** Маркер в ответе run_command: выполнение прервано из‑за неразрешённой команды (для досрочного выхода в core). */
 export const RUN_COMMAND_DISALLOWED_PREFIX = "[run_command] error: COMMAND_DISALLOWED:";
 
+/** Опасные шаблоны команд — отклонять до проверки белого списка. */
+const DANGEROUS_PATTERNS: ReadonlyArray<RegExp | string> = [
+  /\brm\s+-rf\s+\/|\brm\s+-rf\s+\/\s|rm\s+-rf\s+\/\*|rm\s+-rf\s+\.\./i,
+  /:\(\)\s*\{\s*:\|:&\s*\}/,  // fork bomb
+  /\b(truncate|drop\s+database|drop\s+table)\s+/i,
+  /\/etc\/|\/var\/|\/usr\/|\/home\/[^k]|\/root\b/i,  // системные каталоги вне проекта
+];
+function isDangerousCommand(normalized: string): boolean {
+  return DANGEROUS_PATTERNS.some((p) =>
+    typeof p === "string" ? normalized.includes(p) : p.test(normalized)
+  );
+}
+
 /** Запрещённые символы (инъекция команд). */
 const DANGEROUS_CHARS = /[;&|`$\\]/;
 /** Для curl к AGENT_APP_URL/api/ разрешаем обратный слэш (JSON в -d), остальное — как выше. */
@@ -95,6 +108,7 @@ function isCurlToAppUrl(command: string, appUrl: string): boolean {
 
 function isAllowed(command: string): boolean {
   const normalized = normalizeCommandLine(command);
+  if (isDangerousCommand(normalized)) return false;
   const appUrl = getConfig().appUrl.replace(/\/$/, "");
   const isCurlApp = isCurlToAppUrl(normalized, appUrl);
   const dangerous = isCurlApp ? DANGEROUS_CHARS_CURL_LOCALHOST : DANGEROUS_CHARS;

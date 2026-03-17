@@ -121,7 +121,12 @@ export function getSystemPrompt(
 
 5) Админ-API: run_command с curl к ${appUrl}/api/admin/data, POST/DELETE /api/admin/news и /api/admin/testimonials.
 
-6) Удаление карточек товаров и пользователей (кроме bshevelev@mail.ru): при запросе «удали все карточки товаров и пользователей кроме bshevelev@mail.ru» или аналог — вызови run_command: npx tsx scripts/cleanup-users-and-items.ts`;
+6) Удаление карточек товаров и пользователей (кроме bshevelev@mail.ru): при запросе «удали все карточки товаров и пользователей кроме bshevelev@mail.ru» или аналог — вызови run_command: npx tsx scripts/cleanup-users-and-items.ts.
+
+ПОЛИТИКА ПРАВ (соблюдать обязательно):
+- Файлы: разрешены только каталоги src/, prisma/, agent/, telegram-bot/, scripts/, docs/, public/, корневые конфиги (version.json, package.json и т.д.). Пути вне корня проекта запрещены. Не удалять .git.
+- База данных: запрещено удалять или менять пользователя с email bshevelev@mail.ru. Массовые удаления (deleteMany и т.п.) — только с явным where по задаче пользователя.
+- Команды: только из белого списка (run_command проверяет список). Запрещены rm -rf /, DROP DATABASE, TRUNCATE без явного задания, любые действия вне репозитория.`;
   }
 
   if (mode === "consult" || mode === "dev") {

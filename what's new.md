@@ -25,6 +25,21 @@
 
 ### ______***UPDATE***________
 
+**05.03.2026 >** Этапы 3–4: политика прав в промпте и run_command; удалена логика pending approval в агенте
+
+**2.1 В приложении Комиссионка (web)**  
+Без изменений. app v1.15.1.
+
+**2.2 В сервисе Агент к модели ИИ**  
+По [docs/design-agent-no-confirmations.md](docs/design-agent-no-confirmations.md): (Этап 3) В системный промпт режима «разработка» добавлена секция ПОЛИТИКА ПРАВ: разрешённые каталоги, запрет на удаление/изменение пользователя bshevelev@mail.ru, deleteMany только с явным where, команды только из белого списка. В `agent/tools/run-command.ts` добавлена явная блокировка опасных шаблонов (rm -rf /, fork bomb, TRUNCATE/DROP DATABASE, пути в /etc, /var и т.д.) до проверки белого списка. (Этап 4) Удалена логика подтверждения вторым сообщением: в `agent/core.ts` убраны импорт и использование approval-store, блоки «откат»/getAndConsumePendingApproval и запрос подтверждения перед write_file/run_command — инструменты выполняются сразу в одном диалоге. В `agent/contract.ts` убраны isConfirmationCode и isShortConfirmation из forceFresh. Удалены неиспользуемые getCommandDescription/getWriteFileDescription из core. agent v1.6.0 → v1.6.1 (патч).
+
+**2.3–2.4**  
+Без изменений. tgbot v1.1.0.
+
+---
+
+### ______***UPDATE***________
+
 **05.03.2026 >** Этапы 1–2: агент без внешнего подтверждения («да»/код) — обновлён системный промпт и API
 
 **2.1 В приложении Комиссионка (web)**  

@@ -14,7 +14,6 @@ import { getSystemPrompt, getSystemPromptForChat } from "./llm/system-prompt.js"
 import { getConfig } from "./config.js";
 import { parseModelIdWithModality, shouldRequestImageOutput, isOpenRouterModelId } from "./lib/model-utils.js";
 import { TOOLS_FOR_LLM, TOOLS_CHAT, TOOLS_CONSULT, executeTool, RUN_COMMAND_DISALLOWED_PREFIX } from "./tools/index.js";
-import { setPending, getAndConsumePendingApproval, getAndConsumePendingVerification, PENDING_APPROVAL_KEY, PENDING_VERIFICATION_KEY, type PendingApproval, type PendingVerification } from "./approval-store.js";
 import { buildReportFooter, readVersions, countWordsForFooter } from "./lib/report-footer.js";
 import { getServicesStatus } from "./lib/services-status.js";
 
@@ -35,57 +34,6 @@ const MAX_DUMP_IN_LOG = 50_000;
 const AGENT_LOGS_DIR = ".agent-logs";
 const LAST_INPUT_FILE = "last-input.txt";
 
-/** Возвращает детальное описание команды для плана изменений. */
-function getCommandDescription(cmd: string): string {
-  const c = cmd.trim().replace(/\s+/g, " ");
-  if (/^npx\s+tsx\s+scripts\/agent-backup\.ts\s+backup\s+/.test(c)) {
-    const paths = c.replace(/^npx\s+tsx\s+scripts\/agent-backup\.ts\s+backup\s+/, "").trim().split(/\s+/).filter(Boolean);
-    return `Резервная копия ${paths.length} файл(ов) перед изменениями (agent-backup): ${paths.slice(0, 5).join(", ")}${paths.length > 5 ? "…" : ""}`;
-  }
-  if (/^npx\s+tsx\s+scripts\/agent-backup\.ts\s+restore\s+/.test(c))
-    return "Восстановление из резервной копии (откат изменений)";
-  if (/^npx\s+tsx\s+scripts\/version-bump\.ts\s+/.test(c)) {
-    const m = c.match(/version-bump\.ts\s+(app|agent|tgbot)\s+(major|minor|patch)/);
-    if (m) return `Обновление версии: ${m[1]} ${m[2]} (version-bump.ts)`;
-    return "Обновление версии компонента (version-bump.ts)";
-  }
-  if (/^pm2\s+restart\s+/.test(c))
-    return "Перезапуск служб PM2 (komissionka, agent, bot) — без этого изменения не применятся";
-  if (/^npx\s+tsx\s+scripts\/count-core-lines\.ts/.test(c))
-    return "Подсчёт строк в core для отчёта о версионности";
-  if (/^npx\s+prisma\s+generate/.test(c))
-    return "Генерация Prisma Client после изменений schema.prisma";
-  if (/^npx\s+prisma\s+migrate\s+dev/.test(c))
-    return "Создание и применение миграции БД (prisma migrate dev)";
-  if (/^npx\s+prisma\s+migrate\s+reset/.test(c))
-    return "Сброс БД и применение всех миграций заново (prisma migrate reset)";
-  if (/^npm\s+run\s+build/.test(c))
-    return "Сборка приложения Next.js (npm run build)";
-  if (/^npm\s+run\s+lint/.test(c))
-    return "Проверка кода линтером (npm run lint)";
-  if (/^npx\s+tsc\s+--noEmit/.test(c))
-    return "Проверка типов TypeScript (tsc --noEmit)";
-  if (/^rm\s+/.test(c))
-    return `Удаление файла: ${c.replace(/^rm\s+/, "").trim()}`;
-  if (/^curl\s+.*\/api\/admin\/data/.test(c))
-    return "GET /api/admin/data — получение списка новостей, отзывов, id для операций";
-  if (/^curl\s+.*-X\s+POST\s+.*\/api\/admin\/news/.test(c))
-    return "POST /api/admin/news — создание новой новости";
-  if (/^curl\s+.*-X\s+POST\s+.*\/api\/admin\/testimonials/.test(c))
-    return "POST /api/admin/testimonials — создание нового отзыва";
-  if (/^curl\s+.*-X\s+DELETE\s+.*\/api\/admin\/news\//.test(c))
-    return "DELETE /api/admin/news/<id> — удаление новости по id";
-  if (/^curl\s+.*-X\s+DELETE\s+.*\/api\/admin\/testimonials\//.test(c))
-    return "DELETE /api/admin/testimonials/<id> — удаление отзыва по id";
-  if (/^curl\s+/.test(c))
-    return `Запрос к API: ${c.slice(0, 80)}…`;
-  return c.length > 80 ? c.slice(0, 80) + "…" : c;
-}
-
-/** Возвращает детальное описание write_file для плана. */
-function getWriteFileDescription(path: string): string {
-  return `Запись нового содержимого в файл ${path}`;
-}
 const LAST_OUTPUT_FILE = "last-output.txt";
 /** Файл с последним ходом рассуждений (для бота и открытия из репозитория). */
 const LAST_REASONING_FILE = "last-reasoning.txt";
@@ -312,92 +260,6 @@ export async function runAgentCore(
     onStep?.(step);
   };
 
-  // Режим «Разработка»: подтверждение — вторым сообщением; откат — командой «откат»
-  if (mode === "dev") {
-    const trimmedPrompt = prompt.trim();
-    if (/^откат\s*$/i.test(trimmedPrompt)) {
-      const cr = getAndConsumePendingVerification();
-      if (!cr) return makeReturn("Нет ожидающего отката. Сначала выполните план и дождитесь результата.");
-      const { pending } = cr;
-      if (pending.kind !== "verification") return makeReturn("Откат невозможен.");
-      const pv = pending as PendingVerification;
-      if (!pv.backupId) return makeReturn("Откат невозможен: нет резервной копии.");
-      appendLog(`Откат по запросу администратора, backupId=${pv.backupId}`);
-      const restoreCmd = `npx tsx scripts/agent-backup.ts restore ${pv.backupId}`;
-      const restoreRes = await executeTool("run_command", { command: restoreCmd });
-      const restored = restoreRes.includes('"ok":true') && restoreRes.includes("restored");
-      const msg = restored
-        ? "Откат выполнен. Репозиторий восстановлен из резервной копии."
-        : "Ошибка отката: " + restoreRes.slice(0, 200);
-      return makeReturn(msg);
-    }
-    const cr = getAndConsumePendingApproval();
-    if (cr) {
-      const { pending, expired } = cr;
-      if (expired) return makeReturn("Время подтверждения истекло. Повторите запрос для нового плана.");
-      if (pending.kind === "approval") {
-        const pa = pending as PendingApproval;
-        const toolCalls = Array.isArray(pa.toolCalls) ? pa.toolCalls : [];
-        const filesToBackup = Array.isArray(pa.filesToBackup) ? pa.filesToBackup : [];
-        if (toolCalls.length === 0 || filesToBackup.length === 0) {
-          return makeReturn("Ошибка: нет действий для выполнения (неверная структура сохранённого плана). Повторите запрос с новым планом.");
-        }
-        try {
-          appendLog(`Подтверждение получено, выполняю ${toolCalls.length} действий`);
-          pushStep({ type: "llm", text: "Резервная копия", detail: "Перед выполнением изменений" });
-          const backupCmd = `npx tsx scripts/agent-backup.ts backup ${filesToBackup.join(" ")}`;
-          const backupRes = await executeTool("run_command", { command: backupCmd });
-          let backupId = "";
-          const idMatch = backupRes.match(/"backupId"\s*:\s*"([^"]+)"/);
-          if (idMatch) backupId = idMatch[1]!;
-          if (!backupId) {
-            return makeReturn("Ошибка создания резервной копии. Действия отменены. Попробуйте снова.");
-          }
-
-          const execResults: string[] = [];
-          for (const tc of toolCalls) {
-            let args: Record<string, unknown> = {};
-            try {
-              args = typeof tc.arguments === "string" ? (JSON.parse(tc.arguments) as Record<string, unknown>) : {};
-            } catch {
-              args = {};
-            }
-            const res = await executeTool(tc.name, args);
-            execResults.push(`${tc.name}: ${res.slice(0, 200)}${res.length > 200 ? "…" : ""}`);
-            pushStep({
-              type: "tool",
-              text: tc.name,
-              detail: String(args.path ?? args.command ?? "").slice(0, 60),
-              toolName: tc.name,
-              toolArgs: typeof tc.arguments === "string" ? tc.arguments : "",
-              toolResultSummary: res.slice(0, 80),
-              success: !res.includes("[error]"),
-            });
-          }
-
-          setPending(PENDING_VERIFICATION_KEY, {
-            kind: "verification",
-            code: PENDING_VERIFICATION_KEY,
-            backupId,
-            executionResult: execResults.join("\n"),
-            createdAt: Date.now(),
-          } satisfies PendingVerification);
-
-          hadModifications = true;
-          const msg =
-            "Действия выполнены. Проверьте результат.\n\nДля отката отправьте сообщение «откат».";
-          return makeReturn(msg, true);
-        } catch (err) {
-          const errMsg = err instanceof Error ? err.message : String(err);
-          appendLog(`Ошибка при выполнении плана: ${errMsg}`);
-          return makeReturn(
-            "Ошибка при выполнении подтверждённого плана. Действия отменены.\n\nДетали: " + errMsg + "\n\nПроверьте логи агента и повторите запрос с новым планом."
-          );
-        }
-      }
-    }
-  }
-
   const maxTurnChars = historyTurnMaxChars ?? 6000;
   const truncateHistoryTurn = (s: string) =>
     s.length > maxTurnChars ? s.slice(0, maxTurnChars) + `\n[... обрезано, всего ${s.length} симв.]` : s;
@@ -542,55 +404,6 @@ export async function runAgentCore(
         content: response.content ?? "",
         tool_calls: response.tool_calls,
       });
-
-      // Режим «Разработка»: перед выполнением write_file/run_command — запрос подтверждения
-      const modifyingTools = ["write_file", "run_command"];
-      const modifyingCalls = response.tool_calls.filter((tc) => modifyingTools.includes(tc.function.name));
-      if (mode === "dev" && modifyingCalls.length > 0) {
-        const actions: string[] = [];
-        const filesToBackup: string[] = [];
-        for (const tc of modifyingCalls) {
-          let args: Record<string, unknown> = {};
-          try {
-            args = JSON.parse(tc.function.arguments) as Record<string, unknown>;
-          } catch {
-            args = {};
-          }
-          if (tc.function.name === "write_file") {
-            const path = String(args.path ?? "");
-            actions.push(`${path}\n   → ${getWriteFileDescription(path)}`);
-            if (path) filesToBackup.push(path);
-          } else if (tc.function.name === "run_command") {
-            const cmd = String(args.command ?? "");
-            actions.push(`${cmd.slice(0, 120)}${cmd.length > 120 ? "…" : ""}\n   → ${getCommandDescription(cmd)}`);
-            if (/prisma\s+migrate/.test(cmd)) filesToBackup.push("prisma");
-            if (/prisma\s+reset/.test(cmd)) filesToBackup.push("prisma");
-          }
-        }
-        if (filesToBackup.length === 0) filesToBackup.push("prisma/schema.prisma");
-
-        setPending(PENDING_APPROVAL_KEY, {
-          kind: "approval",
-          code: PENDING_APPROVAL_KEY,
-          actions,
-          toolCalls: modifyingCalls.map((tc) => ({
-            id: tc.id,
-            name: tc.function.name,
-            arguments: tc.function.arguments,
-          })),
-          messages: [...messages],
-          filesToBackup: [...new Set(filesToBackup)],
-          createdAt: Date.now(),
-        } satisfies PendingApproval);
-
-        const actionsList = actions.map((a, i) => `${i + 1})\n${a}`).join("\n\n");
-        const msg =
-          "⚠️ Требуется подтверждение администратора.\n\n" +
-          "План изменений (выполнится целиком после подтверждения):\n\n" +
-          actionsList +
-          "\n\nОтправьте второе сообщение («да» или любой текст) для выполнения плана. Для отката после выполнения отправьте «откат».";
-        return makeReturn(msg);
-      }
 
       let disallowedCommandResult: string | null = null;
       for (const tc of response.tool_calls) {
