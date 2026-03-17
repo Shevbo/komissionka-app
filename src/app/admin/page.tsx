@@ -2574,20 +2574,54 @@ export default function AdminPage() {
                     <p className="mb-1 shrink-0 text-xs font-medium text-muted-foreground">Ход выполнения</p>
                     <div className="min-h-0 flex-1 overflow-y-auto text-xs">
                       {aiLastSteps.length === 0 && !aiLoading && <p className="text-muted-foreground">—</p>}
-                      {aiLastSteps.map((s, i) => (
-                        <div key={i} className="mb-2 rounded border border-zinc-200 bg-white p-2">
-                          <div className="flex gap-1.5">
-                            <span className={s.type === "llm" ? "text-blue-600" : s.type === "tool" ? "text-amber-600" : "text-green-600"}>{s.type === "llm" ? "●" : s.type === "tool" ? "◆" : "✓"}</span>
-                            <span className="font-medium break-words">{s.text}{s.detail ? ` — ${s.detail}` : ""}</span>
-                            {s.type === "tool" && s.success === false && <span className="text-red-600">ошибка</span>}
-                            {s.type === "tool" && s.success === true && <span className="text-green-600">OK</span>}
+                      {aiLastSteps.map((s, i) => {
+                        const isToolError =
+                          s.type === "tool" &&
+                          s.success === false &&
+                          typeof s.toolResultSummary === "string" &&
+                          /error|ошибка/i.test(s.toolResultSummary);
+                        return (
+                          <div key={i} className="mb-2 rounded border border-zinc-200 bg-white p-2">
+                            <div className="flex gap-1.5">
+                              <span
+                                className={
+                                  s.type === "llm"
+                                    ? "text-blue-600"
+                                    : s.type === "tool"
+                                      ? "text-amber-600"
+                                      : "text-green-600"
+                                }
+                              >
+                                {s.type === "llm" ? "●" : s.type === "tool" ? "◆" : "✓"}
+                              </span>
+                              <span className="font-medium break-words">
+                                {s.text}
+                                {s.detail ? ` — ${s.detail}` : ""}
+                              </span>
+                              {isToolError && <span className="text-red-600">ошибка</span>}
+                              {s.type === "tool" && s.success === true && <span className="text-green-600">OK</span>}
+                            </div>
+                            {s.requestSummary && (
+                              <p className="mt-1 break-words text-zinc-600">{s.requestSummary}</p>
+                            )}
+                            {s.toolName && (
+                              <p className="mt-0.5 break-all font-mono text-[10px] text-zinc-500">
+                                Инструмент: {s.toolName}
+                              </p>
+                            )}
+                            {s.toolArgs && (
+                              <p className="mt-0.5 break-all font-mono text-[10px] text-zinc-500">
+                                Аргументы: {s.toolArgs}
+                              </p>
+                            )}
+                            {s.toolResultSummary && (
+                              <p className="mt-0.5 break-words text-zinc-600">
+                                Результат: {s.toolResultSummary}
+                              </p>
+                            )}
                           </div>
-                          {s.requestSummary && <p className="mt-1 break-words text-zinc-600">{s.requestSummary}</p>}
-                          {s.toolName && <p className="mt-0.5 break-all font-mono text-[10px] text-zinc-500">Инструмент: {s.toolName}</p>}
-                          {s.toolArgs && <p className="mt-0.5 break-all font-mono text-[10px] text-zinc-500">Аргументы: {s.toolArgs}</p>}
-                          {s.toolResultSummary && <p className="mt-0.5 break-words text-zinc-600">Результат: {s.toolResultSummary}</p>}
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                     <div className="mt-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                       {aiLastLogId && (
