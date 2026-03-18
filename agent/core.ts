@@ -83,6 +83,11 @@ export interface RunAgentCoreOptions {
   project?: string;
   /** Версии app/agent/tgbot из приложения — для подвала, чтобы совпадали с админкой. */
   footerVersions?: { app: string; agent: string; tgbot: string };
+  /**
+   * Принудительно отправить системный промпт в LLM.
+   * Используется для force-fresh запросов (промпт с '!'), чтобы гарантировать актуальный контекст и правила инструментов.
+   */
+  forceSystemPrompt?: boolean;
 }
 
 /** Формат префикса ответа ИИ: "Модель [Режим] объём_опыта> " — защита от путаницы с моделями. */
@@ -177,7 +182,7 @@ export async function runAgentCore(
     mode === "chat"
       ? false
       : (mode === "consult" || mode === "dev")
-        ? (isFirstTurnInChat || shouldResendSystemPromptDueToVersion)
+        ? (options?.forceSystemPrompt === true || isFirstTurnInChat || shouldResendSystemPromptDueToVersion)
         : true;
 
   function appendLog(line: string): void {

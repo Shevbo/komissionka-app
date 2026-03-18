@@ -197,6 +197,7 @@ export async function runAgent(
         project,
         inputImages: options?.inputImages,
         footerVersions: options?.footerVersions,
+        forceSystemPrompt: forceFresh,
       }),
       timeoutMs
     );
