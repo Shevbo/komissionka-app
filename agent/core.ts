@@ -414,6 +414,36 @@ export async function runAgentCore(
       if (response.content) {
         appendLog(`--- Текст ответа модели ---\n${response.content.length > MAX_DUMP_IN_LOG ? response.content.slice(0, MAX_DUMP_IN_LOG) + `...[обрезано]` : response.content}`);
       }
+
+      // RADICAL GUARD: в режиме "разработка" запрещаем любые tool-вызовы, пока модель не задала
+      // хотя бы один уточняющий вопрос пользователю. Это гарантирует, что агент не пойдёт "вслепую"
+      // и не начнёт выполнять запреты вроде sed/run_command до уточнения требований.
+      if (mode === "dev") {
+        const hasAnyClarifyingQuestionInHistory = historyTurns
+          .slice()
+          .reverse()
+          .some((t) => {
+            if (t.role !== "assistant") return false;
+            const c = String(t.content ?? "");
+            return c.includes("?") || /\b(уточн|какие|подтверд)\b/i.test(c);
+          });
+        if (!hasAnyClarifyingQuestionInHistory) {
+          const ask =
+            "Для корректного выполнения задачи в «разработке» нужно уточнение.\n\n" +
+            "1) Какие именно файлы вы разрешаете менять (например `telegram-bot/bot.ts`, связанные модули)?\n" +
+            "2) Какой формат “нескольких файлов” вам нужен: несколько `inputImages` в одном запросе или раздельная обработка?\n" +
+            "3) Как вы хотите проверить результат (что должно появиться/измениться в Telegram)?";
+          appendLog("DEV guard: tool calls blocked until clarifying question is asked");
+          pushStep({
+            type: "done",
+            text: "Нужно уточнение",
+            detail: "Блокировка tool-вызовов до вопроса пользователю",
+            requestSummary: "Агент ещё не задал уточняющий вопрос.",
+          });
+          return makeReturn(ask);
+        }
+      }
+
       for (const tc of response.tool_calls) {
         appendLog(`--- tool_call: ${tc.function.name} ---\nАргументы: ${tc.function.arguments}`);
       }
