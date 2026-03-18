@@ -2775,14 +2775,17 @@ export default function AdminPage() {
                             const AGENT_TIMEOUT_MS = aiMode === "dev" ? 10 * 60_000 : 3 * 60_000;
                             const timeoutId = window.setTimeout(() => controller.abort(), AGENT_TIMEOUT_MS);
                             try {
+                              // SSE-стриминг иногда падает в Next.js (failed to pipe response / ECONNRESET),
+                              // из-за чего пользователь видит "Не удалось отправить запрос к агенту".
+                              // Здесь используем надёжный режим: один JSON-ответ с результатом, шагами и logId.
                               const res = await fetch("/api/admin/agent/run", {
                                 method: "POST",
                                 credentials: "include",
-                                headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+                                headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify({
                                   prompt: userPromptForAgent,
                                   history: historyForRequest,
-                                  stream: true,
+                                  stream: false,
                                   mode: aiMode,
                                   project: "Комиссионка",
                                   chatName: activeAiSession?.title ?? undefined,
@@ -2790,53 +2793,27 @@ export default function AdminPage() {
                                 }),
                                 signal: controller.signal,
                               });
-                              const contentType = res.headers.get("Content-Type") ?? "";
-                              if (contentType.includes("text/event-stream") && res.body) {
-                                const reader = res.body.getReader();
-                                const decoder = new TextDecoder();
-                                let buffer = "";
-                                let eventType = "";
-                                while (true) {
-                                  const { done, value } = await reader.read();
-                                  if (done) break;
-                                  buffer += decoder.decode(value, { stream: true });
-                                  const lines = buffer.split("\n");
-                                  buffer = lines.pop() ?? "";
-                                  for (let i = 0; i < lines.length; i++) {
-                                    const line = lines[i];
-                                    if (line.startsWith("event: ")) eventType = line.slice(7).trim();
-                                    else if (line.startsWith("data: ") && eventType) {
-                                      try {
-                                        const data = JSON.parse(line.slice(6)) as unknown;
-                                        if (eventType === "step") {
-                                          const step = data as StepItem;
-                                          stepsAccumulator = [...stepsAccumulator, step];
-                                          setAiLastSteps(stepsAccumulator);
-                                        } else if (eventType === "done") {
-                                          const d = data as { result?: string; logId?: string | null };
-                                          setAiLastLogId(d.logId ?? null);
-                                          setAiMessagesForCurrentSession((prev) => [...prev, { role: "assistant", content: normalizeAgentResultForDisplay(d.result ?? ""), timestamp: Date.now() }]);
-                                        } else if (eventType === "error") {
-                                          const d = data as { error?: string };
-                                          setAiMessagesForCurrentSession((prev) => [...prev, { role: "assistant", content: `Ошибка: ${d.error ?? "Unknown"}`, timestamp: Date.now() }]);
-                                        }
-                                      } catch { /* ignore */ }
-                                      eventType = "";
-                                    }
-                                  }
-                                }
-                              } else {
-                                const data = (await res.json()) as { result?: string; error?: string; steps?: Array<{ type: string; text: string; detail?: string }>; logId?: string | null };
-                                if (!res.ok) {
-                                  const errMsg = data.error ?? String(res.status);
-                                  setAiMessagesForCurrentSession((prev) => [...prev, { role: "assistant", content: `Ошибка: ${errMsg}`, timestamp: Date.now() }]);
-                                  appendAgentDiagnoseToChat();
-                                  return;
-                                }
-                                setAiLastSteps(data.steps ?? []);
-                                setAiLastLogId(data.logId ?? null);
-                                setAiMessagesForCurrentSession((prev) => [...prev, { role: "assistant", content: normalizeAgentResultForDisplay(data.result ?? ""), timestamp: Date.now() }]);
+                              const data = (await res.json()) as {
+                                result?: string;
+                                error?: string;
+                                steps?: Array<{ type: string; text: string; detail?: string; requestSummary?: string; toolName?: string; toolArgs?: string; toolResultSummary?: string; success?: boolean }>;
+                                logId?: string | null;
+                              };
+                              if (!res.ok) {
+                                const errMsg = data.error ?? String(res.status);
+                                setAiMessagesForCurrentSession((prev) => [
+                                  ...prev,
+                                  { role: "assistant", content: `Ошибка: ${errMsg}`, timestamp: Date.now() },
+                                ]);
+                                appendAgentDiagnoseToChat();
+                                return;
                               }
+                              setAiLastSteps(data.steps ?? []);
+                              setAiLastLogId(data.logId ?? null);
+                              setAiMessagesForCurrentSession((prev) => [
+                                ...prev,
+                                { role: "assistant", content: normalizeAgentResultForDisplay(data.result ?? ""), timestamp: Date.now() },
+                              ]);
                             } catch (err) {
                               if (err instanceof DOMException && err.name === "AbortError") {
                                 const minutes = AGENT_TIMEOUT_MS / 60_000;

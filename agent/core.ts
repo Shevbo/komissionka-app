@@ -463,7 +463,12 @@ export async function runAgentCore(
           appendLog(`Результат ${name}: ${resultSummary}`);
           break;
         }
-        const isError = result.startsWith("[") && (result.includes("error:") || result.includes("] error:"));
+        // ВАЖНО: не считаем содержимое read_file/grep "ошибкой" только потому что в коде встречается слово "Error".
+        // Ошибка инструмента помечается строго префиксом вида "[tool] error:" или "[error] ...".
+        const isError =
+          /^\[(read_file|write_file|list_dir|grep)\]\s+error:/i.test(result) ||
+          /^\[error\]/i.test(result) ||
+          result.startsWith(RUN_COMMAND_DISALLOWED_PREFIX);
         if (!isError && (name === "write_file" || name === "run_command")) hadModifications = true;
         const maxInContext = toolResultMaxCharsInContext ?? 8000;
         const resultForContext = result.length > maxInContext
