@@ -33,6 +33,16 @@ describe("read_file", () => {
     const out = readFile("src/nonexistent.ts");
     assert.strictEqual(out.ok, false);
   });
+
+  it("читает фрагмент файла по offset/limit (через прямой вызов read-file.ts)", async () => {
+    const mod = await import("./read-file.js");
+    const out = mod.readFile("telegram-bot/bot.ts", { offset_lines: 0, limit_lines: 5 });
+    assert.strictEqual(out.ok, true);
+    if (out.ok) {
+      assert.ok(typeof out.startLine === "number" && typeof out.endLine === "number");
+      assert.ok(out.content.length > 0);
+    }
+  });
 });
 
 describe("list_dir", () => {

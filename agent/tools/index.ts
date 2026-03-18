@@ -43,10 +43,16 @@ export function executeTool(
   switch (name) {
     case "read_file": {
       const path = args.path as string;
-      const out = readFile(path);
+      const offset_lines = typeof args.offset_lines === "number" ? (args.offset_lines as number) : undefined;
+      const limit_lines = typeof args.limit_lines === "number" ? (args.limit_lines as number) : undefined;
+      const out = readFile(path, { offset_lines, limit_lines });
       return Promise.resolve(
         out.ok
-          ? `[read_file]\npath: ${out.path}\ncontent:\n${out.content}`
+          ? `[read_file]\npath: ${out.path}${
+              typeof out.startLine === "number" && typeof out.endLine === "number"
+                ? `\nlines: ${out.startLine}-${out.endLine}`
+                : ""
+            }\ncontent:\n${out.content}`
           : `[read_file] error: ${out.error}`
       );
     }
@@ -259,13 +265,21 @@ export const TOOLS_FOR_LLM: ToolDefinition[] = [
     function: {
       name: "read_file",
       description:
-        "Прочитать содержимое файла по пути относительно корня репозитория. Разрешены каталоги: src/, prisma/, docs/, agent/, public/ и корневые конфиги (package.json, tsconfig.json и т.д.).",
+        "Прочитать содержимое файла по пути относительно корня репозитория. Разрешены каталоги: src/, prisma/, docs/, agent/, public/ и корневые конфиги (package.json, tsconfig.json и т.д.). Для больших файлов используйте offset_lines/limit_lines, чтобы прочитать только нужный фрагмент и экономить токены.",
       parameters: {
         type: "object",
         properties: {
           path: {
             type: "string",
             description: "Путь к файлу относительно корня (например, src/app/page.tsx, prisma/schema.prisma).",
+          },
+          offset_lines: {
+            type: "number",
+            description: "Сколько строк пропустить с начала (0 = читать с первой строки).",
+          },
+          limit_lines: {
+            type: "number",
+            description: "Сколько строк прочитать (по умолчанию 200, если offset_lines задан).",
           },
         },
         required: ["path"],

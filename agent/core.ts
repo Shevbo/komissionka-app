@@ -164,8 +164,18 @@ export async function runAgentCore(
 
   /** В режимах консультация/разработка системный промпт отправляем только при первом сообщении в чате; при последующих полагаемся на память модели. */
   const isFirstTurnInChat = historyTurns.length === 0;
+  const lastAssistantText = [...historyTurns].reverse().find((t) => t.role === "assistant")?.content ?? "";
+  const lastAgentVersionMatch = lastAssistantText.match(/\bagent v(\d+\.\d+\.\d+)\b/i);
+  const lastAgentVersion = lastAgentVersionMatch?.[1] ?? null;
+  const currentAgentVersion = (options?.footerVersions ?? readVersions(root))?.agent ?? null;
+  const shouldResendSystemPromptDueToVersion =
+    !!currentAgentVersion && !!lastAgentVersion && currentAgentVersion !== lastAgentVersion;
   const sendSystemPrompt =
-    mode === "chat" ? false : (mode === "consult" || mode === "dev") ? isFirstTurnInChat : true;
+    mode === "chat"
+      ? false
+      : (mode === "consult" || mode === "dev")
+        ? (isFirstTurnInChat || shouldResendSystemPromptDueToVersion)
+        : true;
 
   function appendLog(line: string): void {
     logEntries.push(`[${new Date().toISOString()}] ${line}`);
