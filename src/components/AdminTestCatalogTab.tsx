@@ -98,6 +98,13 @@ function statusClass(status: string | null): string {
   return "text-muted-foreground";
 }
 
+function hasAgentExpectedText(parameters: unknown): boolean {
+  if (!parameters || typeof parameters !== "object") return false;
+  const p = parameters as Record<string, unknown>;
+  const expectedText = typeof p.expectedText === "string" ? p.expectedText : "";
+  return expectedText.trim().length > 0;
+}
+
 export function AdminTestCatalogTab() {
   const [cases, setCases] = useState<TestCaseRow[]>([]);
   const [modules, setModules] = useState<Array<{ id: string; name: string }>>([]);
@@ -195,6 +202,11 @@ export function AdminTestCatalogTab() {
   };
 
   const runTest = async (id: string) => {
+    const tc = cases.find((c) => c.id === id);
+    if (tc && tc.scope === "agent" && !hasAgentExpectedText(tc.parameters)) {
+      toast.error("Для scope=agent нужен expectedText. Сначала нажмите «Обогатить спецификацию тест‑кейса с ИИ».");
+      return;
+    }
     setRunningId(id);
     try {
       const res = await fetch(`/api/admin/test-cases/${id}/run`, {
@@ -453,7 +465,7 @@ export function AdminTestCatalogTab() {
                         </Button>
                         <Button
                           size="sm"
-                          disabled={runningId === c.id || !c.enabled}
+                          disabled={runningId === c.id || !c.enabled || (c.scope === "agent" && !hasAgentExpectedText(c.parameters))}
                           onClick={() => void runTest(c.id)}
                         >
                           <Play className="mr-1 h-3 w-3" />
@@ -561,6 +573,12 @@ export function AdminTestCatalogTab() {
                   {JSON.stringify(selectedCase.parameters ?? {}, null, 2)}
                 </pre>
               </div>
+              {selectedCase.scope === "agent" && !hasAgentExpectedText(selectedCase.parameters) && (
+                <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  ВНИМАНИЕ: в parameters отсутствует `expectedText`. Прогон для scope=agent будет провален.
+                  Нажмите «Обогатить спецификацию тест‑кейса с ИИ» — это заполнит required поля.
+                </div>
+              )}
               <div className="flex flex-wrap gap-2">
                 <Button
                   variant="outline"
@@ -572,7 +590,7 @@ export function AdminTestCatalogTab() {
                 </Button>
                 <Button
                   onClick={() => void runTest(selectedCase.id)}
-                  disabled={runningId === selectedCase.id}
+                  disabled={runningId === selectedCase.id || (selectedCase.scope === "agent" && !hasAgentExpectedText(selectedCase.parameters))}
                 >
                   <Play className="mr-2 h-4 w-4" />
                   Запустить сейчас
