@@ -82,7 +82,7 @@ export async function POST(
     if (testCase.scope === "agent") {
       const model = normalizeModelId(paramsJson.model);
       const mode = normalizeAgentMode(paramsJson.mode);
-      const userPrompt = String(paramsJson.userPrompt ?? "");
+      const userPrompt = typeof paramsJson.userPrompt === "string" ? paramsJson.userPrompt : "";
       const expectedText = typeof paramsJson.expectedText === "string" ? paramsJson.expectedText : null;
 
       const body = {
@@ -117,7 +117,18 @@ export async function POST(
       const resultText = typeof data.result === "string" ? data.result : typeof data.error === "string" ? data.error : "";
       const checks: Array<{ name: string; ok: boolean; details?: string }> = [];
       let success = false;
-      if (expectedText) {
+      if (!expectedText || !expectedText.trim()) {
+        success = false;
+        checks.push({
+          name: "expectedTextMissing",
+          ok: false,
+          details: "parameters.expectedText отсутствует или пустой JSON. Заполните параметры через «Обогатить спецификацию с ИИ».",
+        });
+        diagnostics = {
+          expectedTextMissing: true,
+          hint: "См. test_cases.parameters для тест‑кейса: expectedText должен быть строкой.",
+        };
+      } else {
         const ok = resultText.includes(expectedText);
         success = ok;
         checks.push({
