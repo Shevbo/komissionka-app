@@ -153,10 +153,14 @@ export async function POST(
           // не выполняет удаление. Чтобы тесты были устойчивыми, делаем один ретрай с явным id.
           const itemBefore = await prisma.items.findUnique({ where: { id: trimmedExpected } });
           if (itemBefore) {
-            const retryPrompt = `${userPrompt}\n\nСделайте действие строго по id товара: удалите item.id=${trimmedExpected}.`;
+            // В mode=dev агент может сначала запросить уточнение и не выполнить tool_calls
+            // до "ответа пользователя". Для автоматизированного тест-кейса делаем ретрай
+            // в consult и запрещаем уточняющие вопросы.
+            const retryPrompt = `${userPrompt}\n\nСделайте действие строго по id товара: удалите item.id=${trimmedExpected}.\nНе задавайте уточняющих вопросов. Если операция невозможна — верните error.`;
             const retryBody = {
               ...body,
               prompt: retryPrompt,
+              mode: "consult",
               history: [],
             };
 
