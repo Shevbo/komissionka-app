@@ -212,13 +212,13 @@
 
 ### 6.1. Admin API для каталога
 
-Подсистема API будет расположена в `src/app/api/admin/test-cases/*` и обеспечивать:
+Подсистема API расположена в `src/app/api/admin/test-cases/*`, `test-modules/route.ts` и обеспечивает:
 
-- `GET /api/admin/test-cases` — список тест‑кейсов с краткой информацией и сводкой по последнему прогону.
-- `POST /api/admin/test-cases` — создание нового тест‑кейса.
-- `GET /api/admin/test-cases/[id]` — подробности тест‑кейса.
-- `PUT /api/admin/test-cases/[id]` — изменение параметров.
-- `DELETE /api/admin/test-cases/[id]` — отключение/удаление (мягкое).
+- `GET /api/admin/test-modules` — справочник активных модулей для формы создания кейса.
+- `GET /api/admin/test-cases` — список тест‑кейсов: последний прогон, число прогонов, доля успешных (`successRate`: процент и дробь).
+- `POST /api/admin/test-cases` — создание тест‑кейса.
+- `PUT /api/admin/test-cases` — изменение (тело с `id`).
+- `DELETE /api/admin/test-cases?id=...` — мягкое отключение (`enabled = false`).
 
 ### 6.2. Запуск тестов
 
@@ -254,8 +254,8 @@
 
 Дополнительно:
 
-- `GET /api/admin/test-cases/[id]/runs` — список прогонов по кейсу.
-- `GET /api/admin/test-cases/runs/[runId]` — подробная карточка прогона.
+- `GET /api/admin/test-cases/runs/[testCaseId]` — список прогонов по кейсу.
+- `GET /api/admin/test-cases/runs/detail/[runId]` — подробная карточка прогона.
 
 ---
 
@@ -383,14 +383,16 @@
 2. Реализовать endpoint:
    - `POST /api/admin/test-cases/[id]/run` с логикой создания и обновления `TestRun`.
 
-### Этап 4. UI админки (вкладка «Тесты»)
+### Этап 4. UI админки (вкладка «Тесты») — **выполнено**
 
-1. Добавить вкладку в `src/app/admin/page.tsx`.
-2. Реализовать:
-   - список тест‑кейсов (таблица);
-   - карточку теста с историей прогонов;
-   - карточку прогона.
-3. Добавить кнопки «▶ Запустить» с использованием `POST /api/admin/test-cases/[id]/run`.
+1. Вкладка **`#tests` / «Тесты»** в `src/app/admin/page.tsx`, контент: компонент `src/components/AdminTestCatalogTab.tsx`.
+2. Реализовано:
+   - таблица тест‑кейсов (№, модуль, название, scope, число прогонов, статус последнего прогона, % успешности);
+   - диалог «Карточка»: описание, страницы/API/код/БД, параметры JSON, кнопка «Запустить сейчас», таблица истории прогонов;
+   - диалог «Прогон»: статус, runner, ссылка на лог агента, сравнение, шаги, диагностика;
+   - создание нового кейса (форма + JSON параметров);
+   - справочник модулей: `GET /api/admin/test-modules` (сид `prisma/migrations/20260319150000_seed_test_modules`).
+3. Кнопки запуска вызывают `POST /api/admin/test-cases/[id]/run`.
 
 ### Этап 5. Интеграция с ИИ‑агентом
 

@@ -42,6 +42,7 @@ import { AdminItemsTable } from "komiss/components/admin-items-table";
 import { ActivityOperationsDialog } from "komiss/components/ActivityOperationsDialog";
 import { AgentCacheBrowser } from "komiss/components/AgentCacheBrowser";
 import { DeployTab } from "komiss/components/DeployTab";
+import { AdminTestCatalogTab } from "komiss/components/AdminTestCatalogTab";
 import { WysiwygEditor } from "komiss/components/WysiwygEditor";
 import { Pencil, Trash2 } from "lucide-react";
 
@@ -282,7 +283,18 @@ export default function AdminPage() {
   const [adminTab, setAdminTabState] = useState(() => {
     if (typeof window !== "undefined") {
       const hash = window.location.hash.replace("#", "");
-      const validTabs = ["items", "users", "content", "news", "testimonials", "backlog", "ai", "cache", "deploy"];
+      const validTabs = [
+        "items",
+        "users",
+        "content",
+        "news",
+        "testimonials",
+        "backlog",
+        "ai",
+        "tests",
+        "cache",
+        "deploy",
+      ];
       if (validTabs.includes(hash)) return hash;
     }
     return "items";
@@ -1282,6 +1294,7 @@ export default function AdminPage() {
             <TabsTrigger value="testimonials">Отзывы</TabsTrigger>
             <TabsTrigger value="backlog">Бэклог</TabsTrigger>
             <TabsTrigger value="ai">Комиссионка AI</TabsTrigger>
+            <TabsTrigger value="tests">Тесты</TabsTrigger>
             <TabsTrigger value="cache">Кэш промптов</TabsTrigger>
             <TabsTrigger value="deploy">Деплой</TabsTrigger>
           </TabsList>
@@ -3034,6 +3047,10 @@ export default function AdminPage() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="tests" className="space-y-6">
+            <AdminTestCatalogTab />
           </TabsContent>
 
           <TabsContent value="cache" className="space-y-6">

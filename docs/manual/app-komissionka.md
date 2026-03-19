@@ -98,6 +98,7 @@ src/
 | Роли | [src/app/api/admin/profiles/[id]/role/route.ts](../src/app/api/admin/profiles/[id]/role/route.ts) | Обновление role (защита от снятия admin с себя) |
 | Привязка Telegram | [src/app/api/admin/telegram-bind-code/route.ts](../src/app/api/admin/telegram-bind-code/route.ts) | Генерация кода привязки |
 | Бэклог | [src/app/api/admin/backlog/route.ts](../src/app/api/admin/backlog/route.ts), `[id]/route.ts`, [scripts/backlog-cli.ts](../scripts/backlog-cli.ts), [docs/backlog.md](../docs/backlog.md) | Таблица backlog в БД + дубликат в docs/backlog.md. Через UI админки и CLI `npx tsx scripts/backlog-cli.ts` описываются хотелки, статусы спринта и задач, ссылки на документацию и сценарии тестирования; это основной канал постановки задач для агента и Cursor. |
+| Каталог тест-кейсов | [src/app/api/admin/test-cases/route.ts](../src/app/api/admin/test-cases/route.ts), [test-modules/route.ts](../src/app/api/admin/test-modules/route.ts), [test-cases/[id]/run/route.ts](../src/app/api/admin/test-cases/[id]/run/route.ts), `test-cases/runs/*` | Универсальный каталог сценариев тестирования (модели `test_modules`, `test_cases`, `test_runs`); UI во вкладке **«Тесты»** админки ([AdminTestCatalogTab.tsx](../src/components/AdminTestCatalogTab.tsx)). Архитектура: [test-catalog-architecture.md](manual/test-catalog-architecture.md) |
 
 ### 3.6 Загрузка файлов
 

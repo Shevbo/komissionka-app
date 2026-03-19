@@ -30,7 +30,10 @@ function mapTestCase(row: any) {
     runsCount: (row as any)._count?.runs ?? 0,
     lastStatus: (row as any).last_run_status ?? null,
     lastRunAt: (row as any).last_run_at ?? null,
-    successRate: (row as any).success_rate ?? null,
+    successRate: (row as any).success_rate as
+      | { percent: number; successCount: number; totalCount: number }
+      | null
+      | undefined,
   };
 }
 
@@ -48,27 +51,49 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const cases = await prisma.test_cases.findMany({
-    orderBy: [{ number: "asc" }],
-    include: {
-      _count: { select: { runs: true } },
-      runs: {
-        orderBy: { started_at: "desc" },
-        take: 1,
-        select: { status: true, started_at: true },
+  const [cases, runStats] = await Promise.all([
+    prisma.test_cases.findMany({
+      orderBy: [{ number: "asc" }],
+      include: {
+        _count: { select: { runs: true } },
+        runs: {
+          orderBy: { started_at: "desc" },
+          take: 1,
+          select: { status: true, started_at: true },
+        },
       },
-    },
-  });
+    }),
+    prisma.test_runs.findMany({
+      select: { test_case_id: true, status: true },
+    }),
+  ]);
+
+  const agg = new Map<string, { total: number; success: number }>();
+  for (const r of runStats) {
+    const cur = agg.get(r.test_case_id) ?? { total: 0, success: 0 };
+    cur.total += 1;
+    if (r.status === "success") cur.success += 1;
+    agg.set(r.test_case_id, cur);
+  }
 
   const withAggregates = cases.map((c) => {
     const lastRun = c.runs[0] ?? null;
     const lastStatus = lastRun?.status ?? null;
     const lastRunAt = lastRun?.started_at?.toISOString() ?? null;
+    const a = agg.get(c.id);
+    const success_rate =
+      a && a.total > 0
+        ? {
+            percent: Math.round((100 * a.success) / a.total),
+            successCount: a.success,
+            totalCount: a.total,
+          }
+        : null;
     return mapTestCase({
       ...c,
       last_run_status: lastStatus,
       last_run_at: lastRunAt,
-      success_rate: null,
+      success_rate,
     });
   });
 

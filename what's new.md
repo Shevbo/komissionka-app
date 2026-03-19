@@ -25,6 +25,19 @@
 
 ### ______***UPDATE***________
 
+**05.03.2026 >** Фича: вкладка «Тесты» в админке (каталог тест‑кейсов, карточка кейса и прогона, запуск из UI)
+
+**2.1 В приложении Комиссионка (web)**  
+Добавлена вкладка **«Тесты»** (`#tests`) в [src/app/admin/page.tsx](src/app/admin/page.tsx), компонент [src/components/AdminTestCatalogTab.tsx](src/components/AdminTestCatalogTab.tsx): таблица кейсов с числом прогонов, статусом последнего прогона и % успешности; диалог карточки кейса (описание, привязки к UI/API/коду/БД, JSON параметров, история прогонов, «Запустить сейчас»); диалог деталей прогона (сравнение, шаги, диагностика, ссылка на лог агента); форма создания кейса. API: [src/app/api/admin/test-modules/route.ts](src/app/api/admin/test-modules/route.ts) — справочник модулей; в `GET /api/admin/test-cases` добавлен расчёт `successRate` по всем прогонам. Миграция-сид: [prisma/migrations/20260319150000_seed_test_modules/migration.sql](prisma/migrations/20260319150000_seed_test_modules/migration.sql). Документация: [docs/manual/test-catalog-architecture.md](docs/manual/test-catalog-architecture.md) (Этап 4 отмечен выполненным), [docs/manual/app-komissionka.md](docs/manual/app-komissionka.md). Заменено/добавлено в core web ~260 строк из 13438. app v1.16.0 → v1.16.1 (патч, завершение UI каталога).
+
+**2.2 В сервисе Агент к модели ИИ**  
+Без изменений. agent v1.7.8.
+
+**2.3–2.4**  
+Без изменений. tgbot v1.1.0.
+
+### ______***UPDATE***________
+
 **05.03.2026 >** Фича: универсальный каталог тест‑кейсов (модели БД и Admin API для списка и истории прогонов)
 
 **2.1 В приложении Комиссионка (web)**  
