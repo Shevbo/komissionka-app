@@ -303,6 +303,16 @@ export function AdminTestCatalogTab() {
         return;
       }
 
+      const inferredParameters =
+        payload.parameters && typeof payload.parameters === "object"
+          ? payload.parameters
+          : {
+              model: payload.model,
+              mode: payload.mode,
+              userPrompt: payload.userPrompt,
+              expectedText: payload.expectedText,
+            };
+
       const updatedBody: Record<string, unknown> = {
         id: selectedCase.id,
         description: payload.description,
@@ -310,7 +320,7 @@ export function AdminTestCatalogTab() {
         apiEndpoints: Array.isArray(payload.apiEndpoints) ? payload.apiEndpoints.map((x: any) => String(x)) : [],
         codeRefs: Array.isArray(payload.codeRefs) ? payload.codeRefs.map((x: any) => String(x)) : [],
         dbEntities: Array.isArray(payload.dbEntities) ? payload.dbEntities.map((x: any) => String(x)) : [],
-        parameters: payload.parameters ?? undefined,
+        parameters: inferredParameters,
         // Заполним только если ИИ реально вернул эти поля
         promptTemplate: typeof payload.promptTemplate === "string" ? payload.promptTemplate : undefined,
         expectedResult: payload.expectedResult ?? undefined,
