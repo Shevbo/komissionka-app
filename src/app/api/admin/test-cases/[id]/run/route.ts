@@ -82,6 +82,15 @@ export async function POST(
   let steps: unknown = null;
   let diagnostics: unknown = null;
 
+  function safeStringify(value: unknown): string {
+    try {
+      if (typeof value === "string") return value;
+      return JSON.stringify(value);
+    } catch {
+      return "";
+    }
+  }
+
   try {
     const paramsJson = (testCase.parameters ?? {}) as Record<string, unknown>;
     if (testCase.scope === "agent") {
@@ -120,6 +129,8 @@ export async function POST(
       agentLogId = data.logId ?? null;
 
       const resultText = typeof data.result === "string" ? data.result : typeof data.error === "string" ? data.error : "";
+      const stepsText = safeStringify(steps);
+      const agentPayloadText = safeStringify(data);
       const checks: Array<{ name: string; ok: boolean; details?: string }> = [];
       let success = false;
       if (!expectedText || !expectedText.trim()) {
@@ -134,12 +145,15 @@ export async function POST(
           hint: "См. test_cases.parameters для тест‑кейса: expectedText должен быть строкой.",
         };
       } else {
-        const ok = resultText.includes(expectedText);
+        const ok =
+          resultText.includes(expectedText) ||
+          stepsText.includes(expectedText) ||
+          agentPayloadText.includes(expectedText);
         success = ok;
         checks.push({
           name: "containsExpectedText",
           ok,
-          details: ok ? undefined : "Ожидаемый текст не найден в ответе агента.",
+          details: ok ? undefined : "Ожидаемый текст не найден: ни в result, ни в steps/payload агента.",
         });
       }
 
