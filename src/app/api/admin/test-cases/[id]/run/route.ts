@@ -17,14 +17,15 @@ async function requireAdmin(): Promise<boolean> {
 
 export async function POST(
   _request: NextRequest,
-  { params }: { params: { id: string } },
+  context: { params: Promise<{ id: string }> },
 ) {
   const isAdmin = await requireAdmin();
   if (!isAdmin) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const testCaseId = params.id;
+  const { id } = await context.params;
+  const testCaseId = id;
   const testCase = await prisma.test_cases.findUnique({ where: { id: testCaseId } });
   if (!testCase) {
     return NextResponse.json({ error: "Test case not found" }, { status: 404 });
