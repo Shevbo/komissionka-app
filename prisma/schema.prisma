@@ -250,3 +250,63 @@ model deploy_log {
   @@index([environment_id])
   @@index([created_at])
 }
+
+// Универсальный каталог тест‑кейсов проекта (см. docs/manual/test-catalog-architecture.md)
+model test_modules {
+  id          String   @id @db.VarChar(64) // app, agent, tgbot, pwa, deploy-worker и т.п.
+  name        String   @db.VarChar(255)
+  description String?  @db.Text
+  active      Boolean  @default(true)
+
+  test_cases  test_cases[]
+}
+
+model test_cases {
+  id                  String        @id @default(uuid()) @db.Uuid
+  number              Int           @unique @db.Integer
+  module_id           String        @db.VarChar(64)
+  title               String        @db.VarChar(255)
+  description         String        @db.Text
+  kind                String        @db.VarChar(32) // manual-guided, semi-automatic, automatic
+  scope               String        @db.VarChar(32) // ui, api, agent, telegram, db, infra
+  prompt_template     String?       @db.Text
+  parameters          Json?         @db.JsonB
+  expected_result     Json?         @db.JsonB
+  tags                String[]      @default([])
+  enabled             Boolean       @default(true)
+  ui_pages            String[]      @default([]) // связанные страницы UI
+  api_endpoints       String[]      @default([]) // маршруты /api/*
+  code_refs           String[]      @default([]) // пути к файлам/функциям
+  db_entities         String[]      @default([]) // модели Prisma
+  spec_enriched_by_ai Boolean       @default(false)
+  spec_enriched_at    DateTime?     @db.Timestamptz(6)
+  spec_enriched_model String?       @db.VarChar(255)
+  created_at          DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime      @default(now()) @updatedAt @db.Timestamptz(6)
+
+  module              test_modules  @relation(fields: [module_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  runs                test_runs[]
+}
+
+model test_runs {
+  id                String      @id @default(uuid()) @db.Uuid
+  test_case_id      String      @db.Uuid
+  run_number        Int         @db.Integer
+  started_at        DateTime    @default(now()) @db.Timestamptz(6)
+  finished_at       DateTime?   @db.Timestamptz(6)
+  status            String      @db.VarChar(32) // pending, running, success, failed, error
+  runner            String?     @db.VarChar(64) // admin-ui, chat-command, cron, api
+  request_context   Json?       @db.JsonB
+  agent_log_id      String?     @db.VarChar(255)
+  status_dump_path  String?     @db.VarChar(1024)
+  conversation_log  Json?       @db.JsonB
+  steps             Json?       @db.JsonB
+  comparison_result Json?       @db.JsonB
+  diagnostics       Json?       @db.JsonB
+
+  test_case         test_cases  @relation(fields: [test_case_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([test_case_id])
+  @@index([status])
+  @@index([started_at])
+}
