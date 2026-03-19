@@ -249,6 +249,10 @@ export function AdminTestCatalogTab() {
         "- uiPages: массив строк (путей/эндпоинтов UI страниц), apiEndpoints: массив строк вида /api/... (без params),",
         "  codeRefs: массив строк (пути к файлам и/или сигнатуры функций), dbEntities: массив строк (имена Prisma моделей).",
         "- description: перепиши профессионально и структурно, сохраняя смысл теста.",
+        "- parameters: обязательно вернуть объект с минимум ключами: model, mode, userPrompt, expectedText (для scope=agent).",
+        "  model и mode должны быть в тех же человекочитаемых значениях, как в UI (например \"Gemini 3 Pro\", \"Разработка\"),",
+        "  userPrompt и expectedText должны быть конкретными строками для сравнения результата.",
+        "- promptTemplate и expectedResult: можешь вернуть при наличии/уместности (необязательно).",
         "",
         "Исходные данные тест‑кейса:",
         `number: ${selectedCase.number}`,
@@ -294,6 +298,7 @@ export function AdminTestCatalogTab() {
         apiEndpoints: Array.isArray(payload.apiEndpoints) ? payload.apiEndpoints.map((x: any) => String(x)) : [],
         codeRefs: Array.isArray(payload.codeRefs) ? payload.codeRefs.map((x: any) => String(x)) : [],
         dbEntities: Array.isArray(payload.dbEntities) ? payload.dbEntities.map((x: any) => String(x)) : [],
+        parameters: payload.parameters ?? undefined,
         // Заполним только если ИИ реально вернул эти поля
         promptTemplate: typeof payload.promptTemplate === "string" ? payload.promptTemplate : undefined,
         expectedResult: payload.expectedResult ?? undefined,
