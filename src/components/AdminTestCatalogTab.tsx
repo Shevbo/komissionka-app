@@ -28,7 +28,7 @@ import {
   SelectValue,
 } from "komiss/components/ui/select";
 import { toast } from "sonner";
-import { Play, RefreshCw } from "lucide-react";
+import { Play, RefreshCw, Sparkles } from "lucide-react";
 
 type SuccessRate = { percent: number; successCount: number; totalCount: number };
 
@@ -103,6 +103,7 @@ export function AdminTestCatalogTab() {
   const [modules, setModules] = useState<Array<{ id: string; name: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCase, setSelectedCase] = useState<TestCaseRow | null>(null);
+  const [enrichLoading, setEnrichLoading] = useState(false);
   const [runs, setRuns] = useState<TestRunRow[]>([]);
   const [runsLoading, setRunsLoading] = useState(false);
   const [runDetailOpen, setRunDetailOpen] = useState(false);
@@ -212,6 +213,109 @@ export function AdminTestCatalogTab() {
       if (selectedCase?.id === id) await loadRuns(id);
     } finally {
       setRunningId(null);
+    }
+  };
+
+  function extractJsonObject(text: string): any | null {
+    const cleaned = text
+      .replace(/```[a-zA-Z0-9_-]*\n/g, "")
+      .replace(/```/g, "")
+      .trim();
+    const firstBrace = cleaned.indexOf("{");
+    const lastBrace = cleaned.lastIndexOf("}");
+    if (firstBrace < 0 || lastBrace <= firstBrace) return null;
+    const slice = cleaned.slice(firstBrace, lastBrace + 1);
+    try {
+      return JSON.parse(slice);
+    } catch {
+      return null;
+    }
+  }
+
+  const enrichSpecification = async () => {
+    if (!selectedCase) return;
+    if (enrichLoading) return;
+
+    setEnrichLoading(true);
+    try {
+      const modelId = "gemini-3-pro-preview";
+      const prompt = [
+        "Ты ведущий тестировщик и архитектор покрытия.",
+        "Проанализируй тест‑кейс и обогати его техническую спецификацию.",
+        "",
+        "Требования к ответу:",
+        "- Верни ТОЛЬКО валидный JSON (без markdown, без комментариев).",
+        "- JSON должен содержать ключи: description, uiPages, apiEndpoints, codeRefs, dbEntities.",
+        "- uiPages: массив строк (путей/эндпоинтов UI страниц), apiEndpoints: массив строк вида /api/... (без params),",
+        "  codeRefs: массив строк (пути к файлам и/или сигнатуры функций), dbEntities: массив строк (имена Prisma моделей).",
+        "- description: перепиши профессионально и структурно, сохраняя смысл теста.",
+        "",
+        "Исходные данные тест‑кейса:",
+        `number: ${selectedCase.number}`,
+        `moduleId: ${selectedCase.moduleId}`,
+        `kind: ${selectedCase.kind}`,
+        `scope: ${selectedCase.scope}`,
+        `description:\n${selectedCase.description}`,
+        `promptTemplate:\n${selectedCase.promptTemplate ?? "—"}`,
+        `parameters (JSON):\n${JSON.stringify(selectedCase.parameters ?? {}, null, 2)}`,
+        `expectedResult (JSON):\n${JSON.stringify(selectedCase.expectedResult ?? {}, null, 2)}`,
+      ].join("\n");
+
+      const res = await fetch("/api/admin/agent/run", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt,
+          history: [],
+          stream: false,
+          mode: "consult",
+          project: "Комиссионка",
+          chatName: `test-case:${selectedCase.number}`,
+          model: modelId,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error ?? "Не удалось запустить ИИ для обогащения");
+        return;
+      }
+
+      const payload = extractJsonObject(String(data.result ?? ""));
+      if (!payload) {
+        toast.error("ИИ вернул невалидный JSON. Открой диагностику/запусти ещё раз.");
+        return;
+      }
+
+      const updatedBody: Record<string, unknown> = {
+        id: selectedCase.id,
+        description: payload.description,
+        uiPages: Array.isArray(payload.uiPages) ? payload.uiPages.map((x: any) => String(x)) : [],
+        apiEndpoints: Array.isArray(payload.apiEndpoints) ? payload.apiEndpoints.map((x: any) => String(x)) : [],
+        codeRefs: Array.isArray(payload.codeRefs) ? payload.codeRefs.map((x: any) => String(x)) : [],
+        dbEntities: Array.isArray(payload.dbEntities) ? payload.dbEntities.map((x: any) => String(x)) : [],
+        // Заполним только если ИИ реально вернул эти поля
+        promptTemplate: typeof payload.promptTemplate === "string" ? payload.promptTemplate : undefined,
+        expectedResult: payload.expectedResult ?? undefined,
+      };
+
+      // PUT /api/admin/test-cases ожидает частичные обновления.
+      const putRes = await fetch("/api/admin/test-cases", {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedBody),
+      });
+      const putJson = await putRes.json().catch(() => ({}));
+      if (!putRes.ok) {
+        toast.error(putJson.error ?? "Не удалось обновить тест‑кейс");
+        return;
+      }
+
+      toast.success("Спецификация тест‑кейса обогащена");
+      await loadCases();
+    } finally {
+      setEnrichLoading(false);
     }
   };
 
@@ -453,6 +557,14 @@ export function AdminTestCatalogTab() {
                 </pre>
               </div>
               <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  disabled={enrichLoading}
+                  onClick={() => void enrichSpecification()}
+                >
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Обогатить спецификацию тест‑кейса с ИИ
+                </Button>
                 <Button
                   onClick={() => void runTest(selectedCase.id)}
                   disabled={runningId === selectedCase.id}
