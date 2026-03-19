@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "komiss/lib/auth";
 import { prisma } from "komiss/lib/prisma";
+import { ALL_AGENT_MODELS, type AgentModelOption } from "komiss/lib/agent-models";
 
 const AGENT_PORT = process.env.AGENT_PORT ?? "3140";
 const AGENT_API_KEY = process.env.AGENT_API_KEY;
@@ -13,6 +14,28 @@ async function requireAdmin(): Promise<boolean> {
     ? await prisma.profiles.findUnique({ where: { id: session.user.id }, select: { role: true } })
     : null;
   return profile?.role === "admin";
+}
+
+function normalizeAgentMode(raw: unknown): "chat" | "consult" | "dev" {
+  const s = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+  if (!s) return "dev";
+  if (s === "dev" || s.includes("разработ")) return "dev";
+  if (s === "consult" || s.includes("консульта")) return "consult";
+  if (s === "chat" || s.includes("курил") || s.includes("чат")) return "chat";
+  return "dev";
+}
+
+function normalizeModelId(raw: unknown): string | undefined {
+  const s = typeof raw === "string" ? raw.trim() : "";
+  if (!s) return undefined;
+  // Если это уже model id (например gemini-3-pro-preview) — оставляем.
+  if (ALL_AGENT_MODELS.some((m) => m.id === s)) return s;
+  // Ищем по имени (например "Gemini 3 Pro" / "Gemini 3 1B").
+  const byName = ALL_AGENT_MODELS.find((m: AgentModelOption) => m.name.trim().toLowerCase() === s.toLowerCase());
+  if (byName) return byName.id;
+  // Если пользователь передал id с modality-шлейфом (|text / |image) — он уже в формате.
+  if (ALL_AGENT_MODELS.some((m) => m.id.startsWith(s))) return s;
+  return s; // как fallback (в агенте есть legacy-разрешение и другие маппинги)
 }
 
 export async function POST(
@@ -57,8 +80,8 @@ export async function POST(
   try {
     const paramsJson = (testCase.parameters ?? {}) as Record<string, unknown>;
     if (testCase.scope === "agent") {
-      const model = String(paramsJson.model ?? "");
-      const mode = String(paramsJson.mode ?? "dev");
+      const model = normalizeModelId(paramsJson.model);
+      const mode = normalizeAgentMode(paramsJson.mode);
       const userPrompt = String(paramsJson.userPrompt ?? "");
       const expectedText = typeof paramsJson.expectedText === "string" ? paramsJson.expectedText : null;
 
@@ -66,7 +89,7 @@ export async function POST(
         prompt: userPrompt,
         history: [],
         mode,
-        model: model || undefined,
+        ...(model ? { model } : {}),
         project: "Комиссионка",
         chatName: `test-case:${testCase.number}`,
         environment: "test-runner",
@@ -91,7 +114,7 @@ export async function POST(
       steps = data.steps ?? null;
       agentLogId = data.logId ?? null;
 
-      const resultText = data.result ?? data.error ?? "";
+      const resultText = typeof data.result === "string" ? data.result : typeof data.error === "string" ? data.error : "";
       const checks: Array<{ name: string; ok: boolean; details?: string }> = [];
       let success = false;
       if (expectedText) {
@@ -104,8 +127,17 @@ export async function POST(
         });
       }
 
-      comparisonResult = { success, checks };
-      status = data.error ? "failed" : success ? "success" : "failed";
+      comparisonResult = {
+        success,
+        checks,
+        agentError: typeof data.error === "string" ? data.error : undefined,
+      };
+      if (typeof data.error === "string" && data.error.trim()) {
+        status = "failed";
+        diagnostics = { agentError: data.error };
+      } else {
+        status = success ? "success" : "failed";
+      }
     } else if (testCase.scope === "api") {
       const method = String(paramsJson.method ?? "GET").toUpperCase();
       const url = String(paramsJson.url ?? "");
