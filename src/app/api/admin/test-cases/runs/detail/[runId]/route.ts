@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "komiss/lib/auth";
 import { prisma } from "komiss/lib/prisma";
@@ -12,15 +12,14 @@ async function requireAdmin(): Promise<boolean> {
 }
 
 export async function GET(
-  _request: Request,
-  context: { params: { runId: string } },
+  _request: NextRequest,
+  { params }: { params: { runId: string } },
 ) {
   const isAdmin = await requireAdmin();
   if (!isAdmin) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-
-  const runId = context.params.runId;
+  const runId = params.runId;
   const run = await prisma.test_runs.findUnique({
     where: { id: runId },
     include: {
