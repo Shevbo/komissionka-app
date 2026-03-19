@@ -10,6 +10,22 @@ import { Readable } from "node:stream";
 const AGENT_PORT = process.env.AGENT_PORT ?? "3140";
 const AGENT_API_KEY = process.env.AGENT_API_KEY;
 
+/** Шаги «хода выполнения» в админке — всегда отдаём при ошибке, чтобы панель не показывала устаревший лог. */
+type AgentReasoningStep = {
+  type: string;
+  text: string;
+  detail?: string;
+  requestSummary?: string;
+  toolName?: string;
+  toolArgs?: string;
+  toolResultSummary?: string;
+  success?: boolean;
+};
+
+function errorSteps(fallbackText: string, detail: string): AgentReasoningStep[] {
+  return [{ type: "llm", text: fallbackText, detail, success: false }];
+}
+
 /** Убирает устаревший текст про «4 цифры» / «Подтвердите кодом» из ответа агента (обратная совместимость со старыми ответами). Больше не добавляет призыв ко второму сообщению — агент работает без внешнего подтверждения. */
 function normalizeAgentResult(result: string): string {
   if (!result) return result;
@@ -105,7 +121,14 @@ export async function POST(req: Request) {
       })
     : null;
   if (profile?.role !== "admin") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json(
+      {
+        error: "Forbidden",
+        steps: errorSteps("Доступ запрещён", "Нужна роль администратора."),
+        logId: null,
+      },
+      { status: 403 }
+    );
   }
 
   let body: {
@@ -124,11 +147,25 @@ export async function POST(req: Request) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    return NextResponse.json(
+      {
+        error: "Invalid JSON",
+        steps: errorSteps("Некорректное тело запроса", "Ожидался JSON."),
+        logId: null,
+      },
+      { status: 400 }
+    );
   }
   const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
   if (!prompt) {
-    return NextResponse.json({ error: "prompt is required" }, { status: 400 });
+    return NextResponse.json(
+      {
+        error: "prompt is required",
+        steps: errorSteps("Пустой запрос", "Укажите текст сообщения (prompt)."),
+        logId: null,
+      },
+      { status: 400 }
+    );
   }
   const history = Array.isArray(body.history)
     ? body.history
@@ -223,7 +260,14 @@ export async function POST(req: Request) {
       health.error === "ECONNREFUSED"
         ? `Агент не запущен (порт ${AGENT_PORT}). В отдельном терминале из корня проекта выполните: npm run agent:serve. Затем откройте http://127.0.0.1:${AGENT_PORT}/health — должен вернуться {"status":"ok"}.`
         : `Агент на порту ${AGENT_PORT} недоступен: ${health.error}. Запустите npm run agent:serve в отдельном терминале.`;
-    return NextResponse.json({ error: msg }, { status: 502 });
+    return NextResponse.json(
+      {
+        error: msg,
+        steps: errorSteps("Агент недоступен", msg.slice(0, 2000)),
+        logId: null,
+      },
+      { status: 502 }
+    );
   }
 
   const reqHeaders = {
@@ -291,8 +335,16 @@ export async function POST(req: Request) {
           })
         : {};
       if (res.statusCode !== 200 || !res.statusCode) {
+        const errText = data.error ?? `Agent returned ${res.statusCode ?? 0}`;
+        const fromAgent = Array.isArray(data.steps) && data.steps.length > 0 ? data.steps : null;
         return NextResponse.json(
-          { error: data.error ?? `Agent returned ${res.statusCode ?? 0}` },
+          {
+            error: errText,
+            steps:
+              fromAgent ??
+              errorSteps(`Ответ агента HTTP ${res.statusCode ?? 0}`, errText.slice(0, 2000)),
+            logId: data.logId ?? null,
+          },
           { status: res.statusCode && res.statusCode >= 500 ? 502 : res.statusCode ?? 502 }
         );
       }
@@ -350,9 +402,12 @@ export async function POST(req: Request) {
         : "";
     const portHint =
       " Если порт занят или недоступен, задайте AGENT_PORT в .env (например 3141) и перезапустите агента.";
+    const fullErr = `Сервис агента недоступен (порт ${AGENT_PORT}). Проверьте: 1) В отдельном терминале запущен «npm run agent:serve». 2) В браузере открывается http://127.0.0.1:${AGENT_PORT}/health.${hint}${portHint} Детали: ${message}`;
     return NextResponse.json(
       {
-        error: `Сервис агента недоступен (порт ${AGENT_PORT}). Проверьте: 1) В отдельном терминале запущен «npm run agent:serve». 2) В браузере открывается http://127.0.0.1:${AGENT_PORT}/health.${hint}${portHint} Детали: ${message}`,
+        error: fullErr,
+        steps: errorSteps("Сбой связи с агентом", fullErr.slice(0, 2000)),
+        logId: null,
       },
       { status: 502 }
     );

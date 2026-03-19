@@ -2767,9 +2767,21 @@ export default function AdminPage() {
                             ]);
                             updateActiveSessionTitle(userPromptForAgent);
                             setAiLoading(true);
-                            // Не очищаем ход выполнения и logId при отправке — они заменятся при первом step/done текущего запроса; при ошибке запроса останутся от предыдущего ответа
+                            // Сразу показываем ход выполнения для ТЕКУЩЕГО запроса (иначе при ошибке оставались шаги прошлого ответа).
+                            setAiLastLogId(null);
+                            {
+                              const p = userPromptForAgent;
+                              const short =
+                                p.length > 160 ? `${p.slice(0, 160)}…` : p;
+                              setAiLastSteps([
+                                {
+                                  type: "llm",
+                                  text: "Запрос отправлен",
+                                  detail: `Ожидание ответа агента… Промпт (${p.length} симв.): ${short}`,
+                                },
+                              ]);
+                            }
                             type StepItem = { type: string; text: string; detail?: string; requestSummary?: string; toolName?: string; toolArgs?: string; toolResultSummary?: string; success?: boolean };
-                            let stepsAccumulator: StepItem[] = [];
                             const historyForRequest = activeAiSession?.messages ?? [];
                             const controller = new AbortController();
                             const AGENT_TIMEOUT_MS = aiMode === "dev" ? 10 * 60_000 : 3 * 60_000;
@@ -2793,14 +2805,45 @@ export default function AdminPage() {
                                 }),
                                 signal: controller.signal,
                               });
-                              const data = (await res.json()) as {
+                              let data: {
                                 result?: string;
                                 error?: string;
-                                steps?: Array<{ type: string; text: string; detail?: string; requestSummary?: string; toolName?: string; toolArgs?: string; toolResultSummary?: string; success?: boolean }>;
+                                steps?: Array<{
+                                  type: string;
+                                  text: string;
+                                  detail?: string;
+                                  requestSummary?: string;
+                                  toolName?: string;
+                                  toolArgs?: string;
+                                  toolResultSummary?: string;
+                                  success?: boolean;
+                                }>;
                                 logId?: string | null;
-                              };
+                              } = {};
+                              try {
+                                data = (await res.json()) as typeof data;
+                              } catch {
+                                data = {};
+                              }
                               if (!res.ok) {
                                 const errMsg = data.error ?? String(res.status);
+                                const errSteps =
+                                  Array.isArray(data.steps) && data.steps.length > 0
+                                    ? data.steps
+                                    : ([
+                                        {
+                                          type: "llm",
+                                          text: "Ошибка API",
+                                          detail: errMsg,
+                                          success: false,
+                                        },
+                                      ] satisfies StepItem[]);
+                                setAiLastSteps(errSteps);
+                                setAiLastLogId(
+                                  typeof data.logId === "string" && data.logId.length > 0
+                                    ? data.logId
+                                    : null
+                                );
                                 setAiMessagesForCurrentSession((prev) => [
                                   ...prev,
                                   { role: "assistant", content: `Ошибка: ${errMsg}`, timestamp: Date.now() },
@@ -2817,6 +2860,15 @@ export default function AdminPage() {
                             } catch (err) {
                               if (err instanceof DOMException && err.name === "AbortError") {
                                 const minutes = AGENT_TIMEOUT_MS / 60_000;
+                                setAiLastSteps([
+                                  {
+                                    type: "llm",
+                                    text: "Таймаут",
+                                    detail: `Агент не ответил за ${minutes} мин. Запрос прерван.`,
+                                    success: false,
+                                  },
+                                ]);
+                                setAiLastLogId(null);
                                 setAiMessagesForCurrentSession((prev) => [
                                   ...prev,
                                   {
@@ -2826,6 +2878,19 @@ export default function AdminPage() {
                                   },
                                 ]);
                               } else {
+                                const detail =
+                                  err instanceof Error ? err.message : String(err);
+                                setAiLastSteps([
+                                  {
+                                    type: "llm",
+                                    text: "Не удалось выполнить запрос",
+                                    detail:
+                                      detail ||
+                                      "Сеть, разбор JSON или обрыв соединения. Нажмите «Дамп состояния» для диагностики.",
+                                    success: false,
+                                  },
+                                ]);
+                                setAiLastLogId(null);
                                 setAiMessagesForCurrentSession((prev) => [
                                   ...prev,
                                   { role: "assistant", content: "Не удалось отправить запрос к агенту.", timestamp: Date.now() },
