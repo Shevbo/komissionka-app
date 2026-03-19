@@ -28,6 +28,11 @@ function normalizeAgentMode(raw: unknown): "chat" | "consult" | "dev" {
 function normalizeModelId(raw: unknown): string | undefined {
   const s = typeof raw === "string" ? raw.trim() : "";
   if (!s) return undefined;
+  const lower = s.toLowerCase();
+  // Пользователь/ИИ иногда передает сокращённо "Gemini 3" без "Pro".
+  // Gemini API ожидает конкретные model IDs из списка ALL_AGENT_MODELS.
+  if (lower === "gemini 3") return "gemini-3-pro-preview";
+  if (lower === "gemini 3 flash") return "gemini-3-flash-preview";
   // Если это уже model id (например gemini-3-pro-preview) — оставляем.
   if (ALL_AGENT_MODELS.some((m) => m.id === s)) return s;
   // Ищем по имени (например "Gemini 3 Pro" / "Gemini 3 1B").
