@@ -13,13 +13,13 @@ async function requireAdmin(): Promise<boolean> {
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: { testCaseId: string } },
+  context: { params: Promise<{ testCaseId: string }> },
 ) {
   const isAdmin = await requireAdmin();
   if (!isAdmin) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const testCaseId = params.testCaseId;
+  const { testCaseId } = await context.params;
   const runs = await prisma.test_runs.findMany({
     where: { test_case_id: testCaseId },
     orderBy: { started_at: "desc" },
