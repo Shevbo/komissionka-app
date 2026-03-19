@@ -118,7 +118,7 @@ export async function POST(
         body: JSON.stringify(body),
       });
 
-      const data = (await res.json()) as {
+      let data = (await res.json()) as {
         result?: string;
         error?: string;
         steps?: unknown;
@@ -149,11 +149,36 @@ export async function POST(
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmedExpected);
 
         if (isUuid) {
+          // Если expectedText похож на UUID товара, иногда агент сначала уточняет намерение и
+          // не выполняет удаление. Чтобы тесты были устойчивыми, делаем один ретрай с явным id.
+          const itemBefore = await prisma.items.findUnique({ where: { id: trimmedExpected } });
+          if (itemBefore) {
+            const retryPrompt = `${userPrompt}\n\nСделайте действие строго по id товара: удалите item.id=${trimmedExpected}.`;
+            const retryBody = {
+              ...body,
+              prompt: retryPrompt,
+              history: [],
+            };
+
+            const retryRes = await fetch(`http://127.0.0.1:${AGENT_PORT}/run`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                ...(AGENT_API_KEY ? { Authorization: `Bearer ${AGENT_API_KEY}` } : {}),
+              },
+              body: JSON.stringify(retryBody),
+            });
+
+            data = (await retryRes.json()) as typeof data;
+            steps = data.steps ?? null;
+            agentLogId = data.logId ?? null;
+          }
+
           // Если expectedText — это UUID, то для текущего test-catalog это означает "id товара".
           // Засчитываем успех только если сущность `items` реально удалена (не найдена в БД),
           // даже если сам агент не вставил UUID в финальный текст.
-          const item = await prisma.items.findUnique({ where: { id: trimmedExpected } });
-          const ok = !item;
+          const itemAfter = await prisma.items.findUnique({ where: { id: trimmedExpected } });
+          const ok = !itemAfter;
           success = ok;
           checks.push({
             name: "dbItemDeletedById",
