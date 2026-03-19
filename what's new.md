@@ -2144,7 +2144,7 @@ last-reasoning.txt вместо .log (Telegram открывает в чате).
 **19.03.2026 >** Багфикс: маппинг модели `Gemini 3` для выполнения scope=agent в тестах
 
 **2.1 В приложении Комиссионка (web)**  
-Исправлено выполнение тест‑кейса scope=`agent`: нормализация `parameters.model` теперь конвертирует сокращение `"Gemini 3"` в валидный model id `gemini-3-pro-preview`, чтобы агенту не уходили неподдерживаемые имена и Gemini API не возвращал `400 unexpected model name format`. Файл: [src/app/api/admin/test-cases/[id]/run/route.ts](src/app/api/admin/test-cases/[id]/run/route.ts). app v1.16.7 → v1.16.8 (патч).
+Исправлено выполнение тест‑кейса scope=`agent`: нормализация `parameters.model` теперь конвертирует сокращение `"Gemini 3"` в валидный model id `gemini-3-pro-preview`, чтобы агенту не уходили неподдерживаемые имена и Gemini API не возвращал `400 unexpected model name format`. Файл: [src/app/api/admin/test-cases/[id]/run/route.ts](src/app/api/admin/test-cases/[id]/run/route.ts). Заменено строк core: 5 из 13486. app v1.16.7 → v1.16.8 (патч).
 
 **2.2 В сервисе Агент к модели ИИ**  
 Без изменений. agent v1.7.8.
@@ -2155,7 +2155,7 @@ last-reasoning.txt вместо .log (Telegram открывает в чате).
 **19.03.2026 >** Багфикс: обогащение спецификации сохраняет `parameters` из любого формата ответа ИИ
 
 **2.1 В приложении Комиссионка (web)**  
-Усилена обработка ответа ИИ в кнопке «Обогатить спецификацию тест‑кейса с ИИ»: если `model/mode/userPrompt/expectedText` вернулись либо внутри `parameters`, либо на корневом уровне JSON, UI всё равно сформирует `parameters` и сохранит их в `test_cases` через `PUT /api/admin/test-cases`. Это предотвращает ситуации, когда после обогащения параметры остаются `{}` и прогон падает по `expectedTextMissing`. Файл: [src/components/AdminTestCatalogTab.tsx](src/components/AdminTestCatalogTab.tsx). app v1.16.6 → v1.16.7 (патч).
+Усилена обработка ответа ИИ в кнопке «Обогатить спецификацию тест‑кейса с ИИ»: если `model/mode/userPrompt/expectedText` вернулись либо внутри `parameters`, либо на корневом уровне JSON, UI всё равно сформирует `parameters` и сохранит их в `test_cases` через `PUT /api/admin/test-cases`. Это предотвращает ситуации, когда после обогащения параметры остаются `{}` и прогон падает по `expectedTextMissing`. Файл: [src/components/AdminTestCatalogTab.tsx](src/components/AdminTestCatalogTab.tsx). Заменено строк core: 12 из 13481. app v1.16.6 → v1.16.7 (патч).
 
 **2.2 В сервисе Агент к модели ИИ**  
 Без изменений. agent v1.7.8.
