@@ -145,16 +145,33 @@ export async function POST(
           hint: "См. test_cases.parameters для тест‑кейса: expectedText должен быть строкой.",
         };
       } else {
-        const ok =
-          resultText.includes(expectedText) ||
-          stepsText.includes(expectedText) ||
-          agentPayloadText.includes(expectedText);
-        success = ok;
-        checks.push({
-          name: "containsExpectedText",
-          ok,
-          details: ok ? undefined : "Ожидаемый текст не найден: ни в result, ни в steps/payload агента.",
-        });
+        const trimmedExpected = expectedText.trim();
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmedExpected);
+
+        if (isUuid) {
+          // Если expectedText — это UUID, то для текущего test-catalog это означает "id товара".
+          // Засчитываем успех только если сущность `items` реально удалена (не найдена в БД),
+          // даже если сам агент не вставил UUID в финальный текст.
+          const item = await prisma.items.findUnique({ where: { id: trimmedExpected } });
+          const ok = !item;
+          success = ok;
+          checks.push({
+            name: "dbItemDeletedById",
+            ok,
+            details: ok ? undefined : "Запись в items по ожидаемому id всё ещё существует.",
+          });
+        } else {
+          const ok =
+            resultText.includes(trimmedExpected) ||
+            stepsText.includes(trimmedExpected) ||
+            agentPayloadText.includes(trimmedExpected);
+          success = ok;
+          checks.push({
+            name: "containsExpectedText",
+            ok,
+            details: ok ? undefined : "Ожидаемый текст не найден: ни в result, ни в steps/payload агента.",
+          });
+        }
       }
 
       comparisonResult = {
