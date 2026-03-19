@@ -446,6 +446,7 @@ export async function runAgentCore(
       // хотя бы один уточняющий вопрос пользователю. Это гарантирует, что агент не пойдёт "вслепую"
       // и не начнёт выполнять запреты вроде sed/run_command до уточнения требований.
       if (mode === "dev") {
+        const responseText = String(response.content ?? "");
         const hasAnyClarifyingQuestionInHistory = historyTurns
           .slice()
           .reverse()
@@ -454,16 +455,22 @@ export async function runAgentCore(
             const c = String(t.content ?? "");
             return c.includes("?") || /\b(уточн|какие|подтверд)\b/i.test(c);
           });
+        const responseHasClarification =
+          responseText.includes("?") || /\b(уточн|какие|подтверд)\b/i.test(responseText);
         if (!hasAnyClarifyingQuestionInHistory) {
-          const ask = buildDevClarificationAsk(prompt);
-          appendLog("DEV guard: tool calls blocked until clarifying question is asked");
+          // Если в первом же ответе модель уже задала уточняющие вопросы, НЕ выполняем tool_calls:
+          // возвращаем текст вопросов/плана и ждём ответа пользователя. Это устраняет ваш кейс,
+          // где модель спрашивает про «первую карточку», но одновременно вызывает read_file,
+          // а guard затем ломает поток.
+          const outText = responseHasClarification ? responseText.trim() : buildDevClarificationAsk(prompt);
+          appendLog("DEV guard: returning clarifications and skipping tool calls");
           pushStep({
             type: "done",
             text: "Нужно уточнение",
-            detail: "Блокировка tool-вызовов до вопроса пользователю",
-            requestSummary: "Агент ещё не задал уточняющий вопрос.",
+            detail: "Tool-вызовы пропущены до ответа пользователя",
+            requestSummary: "Модель задала уточняющие вопросы.",
           });
-          return makeReturn(ask);
+          return makeReturn(outText);
         }
       }
 
