@@ -149,18 +149,35 @@ export async function POST(
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmedExpected);
 
         if (isUuid) {
+          const consultModeDisabled =
+            /режим консультации/i.test(resultText) && /операц.*невозможн/i.test(resultText);
+
+          // Если агент вернул сообщение о недоступности инструментов из-за consult-mode,
+          // то тест нельзя считать "успешным" даже если fallback-логика смогла бы удалить запись в БД:
+          // это противоречит ожиданию, что выполнение происходило в запрошенном режиме.
+          if (consultModeDisabled) {
+            success = false;
+            checks.push({
+              name: "agentConsultModeDisabled",
+              ok: false,
+              details: "Агент вернул ошибку о недоступности инструментов в режиме консультации; параметры выполнения не соблюдены.",
+            });
+            diagnostics = {
+              agentConsultModeDisabled: true,
+              agentResultSnippet: resultText.slice(0, 2000),
+            };
+          } else {
           // Если expectedText похож на UUID товара, иногда агент сначала уточняет намерение и
           // не выполняет удаление. Чтобы тесты были устойчивыми, делаем один ретрай с явным id.
           const itemBefore = await prisma.items.findUnique({ where: { id: trimmedExpected } });
           if (itemBefore) {
             // В mode=dev агент может сначала запросить уточнение и не выполнить tool_calls
-            // до "ответа пользователя". Для автоматизированного тест-кейса делаем ретрай
-            // в consult и запрещаем уточняющие вопросы.
+            // до "ответа пользователя". Делаем ретрай в том же режиме, но с явным id и запретом уточнений.
             const retryPrompt = `${userPrompt}\n\nСделайте действие строго по id товара: удалите item.id=${trimmedExpected}.\nНе задавайте уточняющих вопросов. Если операция невозможна — верните error.`;
             const retryBody = {
               ...body,
               prompt: retryPrompt,
-              mode: "consult",
+              mode,
               history: [],
             };
 
@@ -201,6 +218,7 @@ export async function POST(
             ok,
             details: ok ? undefined : "Запись в items по ожидаемому id всё ещё существует (после fallback).",
           });
+          }
         } else {
           const ok =
             resultText.includes(trimmedExpected) ||
