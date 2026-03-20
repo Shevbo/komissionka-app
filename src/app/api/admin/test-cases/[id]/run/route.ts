@@ -152,9 +152,13 @@ export async function POST(
         const hasQuestionMark = /\?\s*$/.test(t) || /\?\s*\n/.test(t);
         return (
           hasQuestionMark ||
+          /уточняющ/i.test(t) ||
+          /нужн[оа].*уточнен/i.test(t) ||
           /нужно уточнен/i.test(t) ||
           /уточнение:/i.test(t) ||
           /уточнит/i.test(t) ||
+          /согласн[ыа]\s+ли/i.test(t) ||
+          /подскажите/i.test(t) ||
           /подтвердите/i.test(t) ||
           /как именно/i.test(t) ||
           /какую именно/i.test(t) ||
