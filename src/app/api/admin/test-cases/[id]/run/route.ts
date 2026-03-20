@@ -125,6 +125,19 @@ export async function POST(
       const consultModeDisabled = (txt: string): boolean =>
         /режим консультации/i.test(txt) && /операц.*невозможн/i.test(txt);
 
+      const AGENT_FETCH_TIMEOUT_MS = Number(process.env.AGENT_FETCH_TIMEOUT_MS ?? "60000");
+
+      async function fetchJsonWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<any> {
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          const res = await fetch(url, { ...init, signal: controller.signal });
+          return await res.json();
+        } finally {
+          clearTimeout(t);
+        }
+      }
+
       const looksLikeClarificationQuestion = (txt: string): boolean => {
         const t = txt.trim();
         if (!t) return false;
@@ -191,16 +204,19 @@ export async function POST(
               environment: "test-runner",
             };
 
-            const res = await fetch(`http://127.0.0.1:${AGENT_PORT}/run`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                ...(AGENT_API_KEY ? { Authorization: `Bearer ${AGENT_API_KEY}` } : {}),
+            const agentUrl = `http://127.0.0.1:${AGENT_PORT}/run`;
+            let data = (await fetchJsonWithTimeout(
+              agentUrl,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  ...(AGENT_API_KEY ? { Authorization: `Bearer ${AGENT_API_KEY}` } : {}),
+                },
+                body: JSON.stringify(body),
               },
-              body: JSON.stringify(body),
-            });
-
-            let data = (await res.json()) as {
+              AGENT_FETCH_TIMEOUT_MS,
+            )) as {
               result?: string;
               error?: string;
               steps?: unknown;
