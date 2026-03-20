@@ -99,13 +99,268 @@ export async function POST(
       const userPrompt = typeof paramsJson.userPrompt === "string" ? paramsJson.userPrompt : "";
       const expectedText = typeof paramsJson.expectedText === "string" ? paramsJson.expectedText : null;
 
+      // Recursive test-runner for agent-scope:
+      // - Calls agent
+      // - If agent asks clarification, simulates user replies (different answers)
+      // - Stores readable chat history in conversation_log
+      const maxChatTurns = 8;
+      const userResponsesRaw = Array.isArray((paramsJson as Record<string, unknown> & { userResponses?: unknown }).userResponses)
+        ? ((paramsJson as Record<string, unknown> & { userResponses?: unknown }).userResponses as unknown[])
+        : null;
+      const userResponses = userResponsesRaw ? userResponsesRaw.filter((x: unknown) => typeof x === "string").map(String) : null;
+
+      type ChatTurn = { role: "user" | "assistant"; content: string };
+      const chatHistory: ChatTurn[] = [];
+
+      let currentPrompt = userPrompt;
+      let lastSteps: unknown = null;
+      let lastAgentLogId: string | null = null;
+      let lastResultText = "";
+      let lastAgentError: string | undefined = undefined;
+
+      let chatSuccess = false;
+      const chatChecks: Array<{ name: string; ok: boolean; details?: string }> = [];
+      let localDiagnostics: unknown = null;
+
+      const consultModeDisabled = (txt: string): boolean =>
+        /режим консультации/i.test(txt) && /операц.*невозможн/i.test(txt);
+
+      const looksLikeClarificationQuestion = (txt: string): boolean => {
+        const t = txt.trim();
+        if (!t) return false;
+        if (consultModeDisabled(t)) return false;
+        return (
+          /нужно уточнен/i.test(t) ||
+          /уточнение:/i.test(t) ||
+          /уточнит/i.test(t) ||
+          /подтвердите/i.test(t) ||
+          /как именно/i.test(t) ||
+          /какую именно/i.test(t) ||
+          /какой именно/i.test(t)
+        );
+      };
+
+      const expectedTextTrimmed = expectedText?.trim() ?? "";
+      const expectedIsUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(expectedTextTrimmed);
+
+      const buildUserReply = (turnIndex: number): string => {
+        if (userResponses && userResponses.length > 0) {
+          const idx = Math.min(turnIndex, userResponses.length - 1);
+          const v = userResponses[idx]!;
+          return v.trim().length ? v : "Ок, продолжай без уточнений.";
+        }
+
+        if (expectedIsUuid && expectedTextTrimmed) {
+          const uuid = expectedTextTrimmed;
+          const variants = [
+            `Подтверждаю действие: удалите item.id=${uuid}. Действуйте без уточнений.`,
+            `Ок. Удалить item.id=${uuid}. Никаких дополнительных вопросов.`,
+            `Удаление подтверждено: item.id=${uuid}. Продолжайте.`,
+          ];
+          return variants[turnIndex % variants.length]!;
+        }
+
+        // Generic answer: acknowledge and let the agent proceed.
+        return "Ок, продолжай по плану без дополнительных уточнений. Выполни действие так, как считаешь нужным.";
+      };
+
+      try {
+        // If expectedText is missing - fail fast.
+        if (!expectedTextTrimmed) {
+          chatSuccess = false;
+          chatChecks.push({
+            name: "expectedTextMissing",
+            ok: false,
+            details: "parameters.expectedText отсутствует или пустой JSON. Заполните параметры через «Обогатить спецификацию с ИИ».",
+          });
+          localDiagnostics = {
+            expectedTextMissing: true,
+            hint: "См. test_cases.parameters для тест‑кейса: expectedText должен быть строкой.",
+          };
+        } else {
+          for (let turnIndex = 0; turnIndex < maxChatTurns; turnIndex++) {
+            const body = {
+              prompt: currentPrompt,
+              history: chatHistory,
+              mode,
+              ...(model ? { model } : {}),
+              project: "Комиссионка",
+              chatName: `test-case:${testCase.number}`,
+              environment: "test-runner",
+            };
+
+            const res = await fetch(`http://127.0.0.1:${AGENT_PORT}/run`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                ...(AGENT_API_KEY ? { Authorization: `Bearer ${AGENT_API_KEY}` } : {}),
+              },
+              body: JSON.stringify(body),
+            });
+
+            let data = (await res.json()) as {
+              result?: string;
+              error?: string;
+              steps?: unknown;
+              logId?: string | null;
+            };
+
+            lastSteps = data.steps ?? null;
+            lastAgentLogId = data.logId ?? null;
+            lastAgentError = typeof data.error === "string" ? data.error : undefined;
+
+            lastResultText =
+              typeof data.result === "string" ? data.result : typeof data.error === "string" ? data.error : "";
+
+            // Store readable chat history (user -> assistant).
+            if (currentPrompt.trim().length > 0) {
+              chatHistory.push({ role: "user", content: currentPrompt });
+            }
+            if (lastResultText.trim().length > 0) {
+              chatHistory.push({ role: "assistant", content: lastResultText });
+            }
+
+            // If agent refuses because consult-mode disables tools - it's a test failure.
+            if (consultModeDisabled(lastResultText)) {
+              chatSuccess = false;
+              chatChecks.push({
+                name: "agentConsultModeDisabled",
+                ok: false,
+                details: "Агент вернул ошибку о недоступности инструментов в режиме консультации; параметры выполнения не соблюдены.",
+              });
+              localDiagnostics = {
+                agentConsultModeDisabled: true,
+                agentResultSnippet: lastResultText.slice(0, 2000),
+              };
+              break;
+            }
+
+            // Success criteria
+            if (expectedIsUuid) {
+              const item = await prisma.items.findUnique({ where: { id: expectedTextTrimmed } });
+              const ok = !item;
+              if (ok) {
+                chatSuccess = true;
+                chatChecks.push({
+                  name: "dbItemDeletedById",
+                  ok,
+                  details: undefined,
+                });
+                break;
+              }
+            } else {
+              const stepsText = safeStringify(lastSteps);
+              const agentPayloadText = safeStringify(data);
+              const ok =
+                lastResultText.includes(expectedTextTrimmed) ||
+                stepsText.includes(expectedTextTrimmed) ||
+                agentPayloadText.includes(expectedTextTrimmed);
+              if (ok) {
+                chatSuccess = true;
+                chatChecks.push({
+                  name: "containsExpectedText",
+                  ok,
+                  details: undefined,
+                });
+                break;
+              }
+            }
+
+            // If agent asks a clarification question - simulate user reply and continue.
+            if (looksLikeClarificationQuestion(lastResultText) && turnIndex < maxChatTurns - 1) {
+              currentPrompt = buildUserReply(turnIndex);
+              continue;
+            }
+
+            // No more conversation or no clarification - stop.
+            break;
+          }
+
+          if (!chatSuccess) {
+            if (expectedIsUuid) {
+              const item = await prisma.items.findUnique({ where: { id: expectedTextTrimmed } });
+              chatChecks.push({
+                name: "dbItemDeletedById",
+                ok: false,
+                details: item ? "Запись в items по ожидаемому id всё ещё существует." : undefined,
+              });
+              localDiagnostics = {
+                dbItemStillExists: Boolean(item),
+                expectedItemId: expectedTextTrimmed,
+                lastAgentResultSnippet: lastResultText.slice(0, 2000),
+              };
+            } else {
+              chatChecks.push({
+                name: "containsExpectedText",
+                ok: false,
+                details: "Ожидаемый текст не найден: ни в result, ни в steps/payload агента.",
+              });
+              localDiagnostics = {
+                expectedText: expectedTextTrimmed,
+                lastAgentResultSnippet: lastResultText.slice(0, 2000),
+              };
+            }
+          }
+        }
+      } catch (err) {
+        chatSuccess = false;
+        localDiagnostics = {
+          error: err instanceof Error ? err.message : String(err),
+        };
+        chatChecks.push({
+          name: "runnerError",
+          ok: false,
+          details: typeof localDiagnostics === "string" ? localDiagnostics : safeStringify(localDiagnostics),
+        });
+      }
+
+      comparisonResult = {
+        success: chatSuccess,
+        checks: chatChecks,
+        agentError: lastAgentError,
+      };
+
+      status = chatSuccess ? "success" : "failed";
+      diagnostics = localDiagnostics;
+      steps = lastSteps ?? undefined;
+      agentLogId = lastAgentLogId ?? null;
+
+      // Persist readable conversation log for chat-scoped tests.
+      const conversation_log = chatHistory.length ? chatHistory : undefined;
+
+      const finished = await prisma.test_runs.update({
+        where: { id: run.id },
+        data: {
+          status,
+          finished_at: new Date(),
+          agent_log_id: agentLogId ?? undefined,
+          conversation_log: conversation_log as any,
+          comparison_result: comparisonResult ?? undefined,
+          steps: steps ?? undefined,
+          diagnostics: diagnostics ?? undefined,
+        },
+      });
+
+      return NextResponse.json({
+        data: {
+          id: finished.id,
+          testCaseId: finished.test_case_id,
+          runNumber: finished.run_number,
+          status: finished.status,
+          startedAt: finished.started_at.toISOString(),
+          finishedAt: finished.finished_at?.toISOString() ?? null,
+          agentLogId: finished.agent_log_id,
+          comparisonResult: finished.comparison_result,
+        },
+      });
+
       const body = {
         prompt: userPrompt,
         history: [],
         mode,
         ...(model ? { model } : {}),
         project: "Комиссионка",
-        chatName: `test-case:${testCase.number}`,
+        chatName: `test-case:${testCase!.number}`,
         environment: "test-runner",
       };
 
@@ -128,12 +383,17 @@ export async function POST(
       steps = data.steps ?? null;
       agentLogId = data.logId ?? null;
 
-      const resultText = typeof data.result === "string" ? data.result : typeof data.error === "string" ? data.error : "";
+      const resultText: string =
+        typeof data.result === "string"
+          ? (data.result as string)
+          : typeof data.error === "string"
+            ? (data.error as string)
+            : "";
       const stepsText = safeStringify(steps);
       const agentPayloadText = safeStringify(data);
       const checks: Array<{ name: string; ok: boolean; details?: string }> = [];
       let success = false;
-      if (!expectedText || !expectedText.trim()) {
+      if (!expectedText?.trim()) {
         success = false;
         checks.push({
           name: "expectedTextMissing",
@@ -145,7 +405,7 @@ export async function POST(
           hint: "См. test_cases.parameters для тест‑кейса: expectedText должен быть строкой.",
         };
       } else {
-        const trimmedExpected = expectedText.trim();
+        const trimmedExpected = expectedText!.trim();
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmedExpected);
 
         if (isUuid) {
@@ -238,9 +498,10 @@ export async function POST(
         checks,
         agentError: typeof data.error === "string" ? data.error : undefined,
       };
-      if (typeof data.error === "string" && data.error.trim()) {
+      const agentError = data.error;
+      if (typeof agentError === "string" && agentError!.trim()) {
         status = "failed";
-        diagnostics = { agentError: data.error };
+        diagnostics = { agentError };
       } else {
         status = success ? "success" : "failed";
       }

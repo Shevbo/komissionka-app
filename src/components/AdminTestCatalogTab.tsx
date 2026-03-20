@@ -706,6 +706,14 @@ export function AdminTestCatalogTab() {
                   {JSON.stringify(runDetail.steps ?? [], null, 2)}
                 </pre>
               </div>
+              {runDetail.conversationLog && (
+                <div>
+                  <h4 className="mb-1 font-medium">История чата</h4>
+                  <pre className="max-h-60 overflow-auto rounded-md border p-2 text-xs">
+                    {JSON.stringify(runDetail.conversationLog ?? [], null, 2)}
+                  </pre>
+                </div>
+              )}
               <div>
                 <h4 className="mb-1 font-medium">Диагностика</h4>
                 <pre className="max-h-48 overflow-auto rounded-md border p-2 text-xs">
