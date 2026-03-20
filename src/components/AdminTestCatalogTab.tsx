@@ -706,7 +706,7 @@ export function AdminTestCatalogTab() {
                   {JSON.stringify(runDetail.steps ?? [], null, 2)}
                 </pre>
               </div>
-              {runDetail.conversationLog && (
+              {runDetail.conversationLog != null && (
                 <div>
                   <h4 className="mb-1 font-medium">История чата</h4>
                   <pre className="max-h-60 overflow-auto rounded-md border p-2 text-xs">
