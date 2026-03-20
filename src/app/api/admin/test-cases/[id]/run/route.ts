@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "komiss/lib/auth";
 import { prisma } from "komiss/lib/prisma";
 import { ALL_AGENT_MODELS, type AgentModelOption } from "komiss/lib/agent-models";
+import { registerTestRunController, unregisterTestRunController } from "komiss/lib/test-run-control";
 
 const AGENT_PORT = process.env.AGENT_PORT ?? "3140";
 const AGENT_API_KEY = process.env.AGENT_API_KEY;
@@ -81,6 +82,8 @@ export async function POST(
   let comparisonResult: unknown = null;
   let steps: unknown = null;
   let diagnostics: unknown = null;
+  const runController = new AbortController();
+  registerTestRunController(run.id, runController);
 
   function safeStringify(value: unknown): string {
     try {
@@ -121,6 +124,7 @@ export async function POST(
       let chatSuccess = false;
       const chatChecks: Array<{ name: string; ok: boolean; details?: string }> = [];
       let localDiagnostics: unknown = null;
+      let cancelledByAdmin = false;
 
       const consultModeDisabled = (txt: string): boolean =>
         /режим консультации/i.test(txt) && /операц.*невозможн/i.test(txt);
@@ -129,12 +133,15 @@ export async function POST(
 
       async function fetchJsonWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<any> {
         const controller = new AbortController();
+        const onRunAbort = () => controller.abort();
+        runController.signal.addEventListener("abort", onRunAbort);
         const t = setTimeout(() => controller.abort(), timeoutMs);
         try {
           const res = await fetch(url, { ...init, signal: controller.signal });
           return await res.json();
         } finally {
           clearTimeout(t);
+          runController.signal.removeEventListener("abort", onRunAbort);
         }
       }
 
@@ -194,6 +201,20 @@ export async function POST(
           };
         } else {
           for (let turnIndex = 0; turnIndex < maxChatTurns; turnIndex++) {
+            const runState = await prisma.test_runs.findUnique({
+              where: { id: run.id },
+              select: { status: true },
+            });
+            if (runState?.status === "cancelled") {
+              cancelledByAdmin = true;
+              chatSuccess = false;
+              localDiagnostics = {
+                cancelledByAdmin: true,
+                details: "Тест‑кейс прерван администратором.",
+              };
+              break;
+            }
+
             const body = {
               prompt: currentPrompt,
               history: chatHistory,
@@ -345,14 +366,27 @@ export async function POST(
         }
       } catch (err) {
         chatSuccess = false;
-        localDiagnostics = {
-          error: err instanceof Error ? err.message : String(err),
-        };
-        chatChecks.push({
-          name: "runnerError",
-          ok: false,
-          details: typeof localDiagnostics === "string" ? localDiagnostics : safeStringify(localDiagnostics),
-        });
+        if (runController.signal.aborted) {
+          cancelledByAdmin = true;
+          localDiagnostics = {
+            cancelledByAdmin: true,
+            details: "Тест‑кейс прерван администратором.",
+          };
+          chatChecks.push({
+            name: "cancelledByAdmin",
+            ok: false,
+            details: "Выполнение остановлено администратором.",
+          });
+        } else {
+          localDiagnostics = {
+            error: err instanceof Error ? err.message : String(err),
+          };
+          chatChecks.push({
+            name: "runnerError",
+            ok: false,
+            details: typeof localDiagnostics === "string" ? localDiagnostics : safeStringify(localDiagnostics),
+          });
+        }
       }
 
       comparisonResult = {
@@ -361,7 +395,7 @@ export async function POST(
         agentError: lastAgentError,
       };
 
-      status = chatSuccess ? "success" : "failed";
+      status = cancelledByAdmin ? "cancelled" : chatSuccess ? "success" : "failed";
       diagnostics = localDiagnostics;
       steps = lastSteps ?? undefined;
       agentLogId = lastAgentLogId ?? null;
@@ -382,6 +416,7 @@ export async function POST(
         },
       });
 
+      unregisterTestRunController(run.id);
       return NextResponse.json({
         data: {
           id: finished.id,
@@ -611,7 +646,7 @@ export async function POST(
       diagnostics: diagnostics ?? undefined,
     },
   });
-
+  unregisterTestRunController(run.id);
   return NextResponse.json({
     data: {
       id: finished.id,

@@ -25,6 +25,22 @@
 
 ### ______***UPDATE***________
 
+**20.03.2026 >** Фича: остановка зависших прогонов и интерактивный live‑просмотр имитации чата
+
+**2.1 В приложении Комиссионка (web)**  
+Добавлены новые возможности для каталога тестов:
+1) Кнопка **«Остановить»** для активных прогонов (`running/pending`) в истории и в карточке прогона.  
+2) API отмены `POST /api/admin/test-cases/runs/cancel/[runId]`, который прерывает выполнение и выставляет статус `cancelled` с диагностикой «прервано админом».  
+3) Кнопка **«Посмотреть интерактив»** — открывает новую вкладку `/admin/test-runs/[runId]/interactive`, где админ в режиме read‑only видит live‑имитацию диалога (polling карточки прогона каждые 2с).  
+4) В раннере прогона добавлена регистрация/abort `AbortController` по runId, чтобы кнопка остановки реально прерывала активный вызов агента.  
+Файлы: [src/components/AdminTestCatalogTab.tsx](src/components/AdminTestCatalogTab.tsx), [src/app/api/admin/test-cases/runs/cancel/[runId]/route.ts](src/app/api/admin/test-cases/runs/cancel/[runId]/route.ts), [src/app/admin/test-runs/[runId]/interactive/page.tsx](src/app/admin/test-runs/[runId]/interactive/page.tsx), [src/lib/test-run-control.ts](src/lib/test-run-control.ts), [src/app/api/admin/test-cases/[id]/run/route.ts](src/app/api/admin/test-cases/[id]/run/route.ts). app v1.17.4 → v1.18.0 (минор).
+
+**2.2 В сервисе Агент к модели ИИ**  
+Без изменений. agent v1.7.8.
+
+**2.3–2.4**  
+Без изменений. tgbot v1.1.0.
+
 **20.03.2026 >** Фича: имитация пользователя до совпадения результата агента с expectedText
 
 **2.1 В приложении Комиссионка (web)**  

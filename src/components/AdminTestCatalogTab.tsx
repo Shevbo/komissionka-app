@@ -240,6 +240,26 @@ export function AdminTestCatalogTab() {
     }
   };
 
+  const stopRun = async (runId: string) => {
+    try {
+      const res = await fetch(`/api/admin/test-cases/runs/cancel/${runId}`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(json.error ?? "Не удалось остановить прогон");
+        return;
+      }
+      toast.success("Прогон прерван администратором");
+      await loadCases();
+      if (selectedCase) await loadRuns(selectedCase.id);
+      if (runDetail?.id === runId) await openRunDetail(runId);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Ошибка остановки прогона");
+    }
+  };
+
   function extractJsonObject(text: string): any | null {
     const cleaned = text
       .replace(/```[a-zA-Z0-9_-]*\n/g, "")
@@ -633,7 +653,7 @@ export function AdminTestCatalogTab() {
                           <TableHead>Статус</TableHead>
                           <TableHead>Начало</TableHead>
                           <TableHead>Runner</TableHead>
-                          <TableHead className="text-right">Подробнее</TableHead>
+                          <TableHead className="text-right">Действия</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -648,9 +668,21 @@ export function AdminTestCatalogTab() {
                             </TableCell>
                             <TableCell className="text-xs">{r.runner ?? "—"}</TableCell>
                             <TableCell className="text-right">
-                              <Button variant="outline" size="sm" onClick={() => void openRunDetail(r.id)}>
-                                Открыть
-                              </Button>
+                              <div className="flex justify-end gap-2">
+                                <Button variant="outline" size="sm" onClick={() => void openRunDetail(r.id)}>
+                                  Открыть
+                                </Button>
+                                <Button variant="outline" size="sm" asChild>
+                                  <a href={`/admin/test-runs/${r.id}/interactive`} target="_blank" rel="noreferrer">
+                                    Посмотреть интерактив
+                                  </a>
+                                </Button>
+                                {(r.status === "running" || r.status === "pending") && (
+                                  <Button variant="destructive" size="sm" onClick={() => void stopRun(r.id)}>
+                                    Остановить
+                                  </Button>
+                                )}
+                              </div>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -712,6 +744,18 @@ export function AdminTestCatalogTab() {
                   {JSON.stringify(runDetail.comparisonResult ?? {}, null, 2)}
                 </pre>
               </div>
+              {(runDetail.status === "running" || runDetail.status === "pending") && (
+                <div className="flex gap-2">
+                  <Button variant="destructive" size="sm" onClick={() => void stopRun(runDetail.id)}>
+                    Остановить
+                  </Button>
+                  <Button variant="outline" size="sm" asChild>
+                    <a href={`/admin/test-runs/${runDetail.id}/interactive`} target="_blank" rel="noreferrer">
+                      Посмотреть интерактив
+                    </a>
+                  </Button>
+                </div>
+              )}
               <div>
                 <h4 className="mb-1 font-medium">Шаги</h4>
                 <pre className="max-h-48 overflow-auto rounded-md border p-2 text-xs">
