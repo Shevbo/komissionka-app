@@ -105,6 +105,18 @@ function hasAgentExpectedText(parameters: unknown): boolean {
   return expectedText.trim().length > 0;
 }
 
+function normalizeConversationLog(log: unknown): Array<{ role: string; content: string }> {
+  if (!Array.isArray(log)) return [];
+  const out: Array<{ role: string; content: string }> = [];
+  for (const t of log) {
+    if (!t || typeof t !== "object") continue;
+    const role = (t as { role?: unknown }).role;
+    const content = (t as { content?: unknown }).content;
+    if (typeof role === "string" && typeof content === "string") out.push({ role, content });
+  }
+  return out;
+}
+
 export function AdminTestCatalogTab() {
   const [cases, setCases] = useState<TestCaseRow[]>([]);
   const [modules, setModules] = useState<Array<{ id: string; name: string }>>([]);
@@ -709,9 +721,22 @@ export function AdminTestCatalogTab() {
               {runDetail.conversationLog != null && (
                 <div>
                   <h4 className="mb-1 font-medium">История чата</h4>
-                  <pre className="max-h-60 overflow-auto rounded-md border p-2 text-xs">
-                    {JSON.stringify(runDetail.conversationLog ?? [], null, 2)}
-                  </pre>
+                  {normalizeConversationLog(runDetail.conversationLog).length > 0 ? (
+                    <div className="max-h-60 overflow-auto rounded-md border p-2 text-xs space-y-2">
+                      {normalizeConversationLog(runDetail.conversationLog).map((t, idx) => (
+                        <div key={`${idx}-${t.role}`}>
+                          <div className="text-[11px] text-muted-foreground">
+                            {t.role === "user" ? "Пользователь" : "Модель"}
+                          </div>
+                          <pre className="whitespace-pre-wrap break-words font-sans text-xs">
+                            {t.content}
+                          </pre>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-muted-foreground text-xs">История пуста</div>
+                  )}
                 </div>
               )}
               <div>
