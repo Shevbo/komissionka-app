@@ -130,17 +130,34 @@ export async function POST(
         /режим консультации/i.test(txt) && /операц.*невозможн/i.test(txt);
 
       const AGENT_FETCH_TIMEOUT_MS = Number(process.env.AGENT_FETCH_TIMEOUT_MS ?? "180000");
+      /** Жёсткий лимит на весь прогон (несколько ходов), чтобы не зависать в running часами. */
+      const TEST_RUN_MAX_MS = Number(process.env.TEST_RUN_MAX_MS ?? String(25 * 60 * 1000));
+      const agentRunStartedAt = Date.now();
 
+      /**
+       * Таймаут через Promise.race: даже если Node fetch игнорирует AbortSignal, await завершится по таймеру.
+       */
       async function fetchJsonWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<any> {
         const controller = new AbortController();
         const onRunAbort = () => controller.abort();
         runController.signal.addEventListener("abort", onRunAbort);
-        const t = setTimeout(() => controller.abort(), timeoutMs);
+        let timeoutId: ReturnType<typeof setTimeout> | undefined;
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => {
+            controller.abort();
+            const e = new Error(`Превышен таймаут ожидания ответа агента (${timeoutMs} мс).`);
+            e.name = "AgentFetchTimeoutError";
+            reject(e);
+          }, timeoutMs);
+        });
         try {
-          const res = await fetch(url, { ...init, signal: controller.signal });
-          return await res.json();
+          const fetchPromise = (async () => {
+            const res = await fetch(url, { ...init, signal: controller.signal });
+            return await res.json();
+          })();
+          return await Promise.race([fetchPromise, timeoutPromise]);
         } finally {
-          clearTimeout(t);
+          if (timeoutId !== undefined) clearTimeout(timeoutId);
           runController.signal.removeEventListener("abort", onRunAbort);
         }
       }
@@ -205,6 +222,22 @@ export async function POST(
           };
         } else {
           for (let turnIndex = 0; turnIndex < maxChatTurns; turnIndex++) {
+            if (Date.now() - agentRunStartedAt > TEST_RUN_MAX_MS) {
+              chatSuccess = false;
+              chatChecks.push({
+                name: "runWallClockExceeded",
+                ok: false,
+                details: `Превышен лимит времени прогона (${TEST_RUN_MAX_MS} мс).`,
+              });
+              localDiagnostics = {
+                runWallClockExceeded: true,
+                maxMs: TEST_RUN_MAX_MS,
+                elapsedMs: Date.now() - agentRunStartedAt,
+              };
+              runController.abort();
+              break;
+            }
+
             const runState = await prisma.test_runs.findUnique({
               where: { id: run.id },
               select: { status: true },
@@ -230,6 +263,32 @@ export async function POST(
             };
 
             const agentUrl = `http://127.0.0.1:${AGENT_PORT}/run`;
+
+            // До ответа агента в БД уже виден диалог: пользователь + маркер ожидания (интерактив не пустой).
+            const pendingLog: ChatTurn[] = [
+              ...chatHistory,
+              { role: "user", content: currentPrompt },
+              {
+                role: "assistant",
+                content: `⏳ Ожидание ответа агента (таймаут ${AGENT_FETCH_TIMEOUT_MS} мс за ход)…`,
+              },
+            ];
+            await prisma.test_runs.update({
+              where: { id: run.id },
+              data: {
+                status: "running",
+                conversation_log: pendingLog as unknown as object,
+                diagnostics: {
+                  phase: "awaitingAgent",
+                  turn: turnIndex + 1,
+                  agentUrl,
+                  timeoutMsPerTurn: AGENT_FETCH_TIMEOUT_MS,
+                  maxRunMs: TEST_RUN_MAX_MS,
+                  updatedAt: new Date().toISOString(),
+                } as unknown as object,
+              },
+            });
+
             let data = (await fetchJsonWithTimeout(
               agentUrl,
               {
@@ -396,9 +455,22 @@ export async function POST(
             details: "Выполнение остановлено администратором.",
           });
         } else {
+          // Иначе финальный update перезапишет conversation_log пустым chatHistory и сотрёт «ожидание» из БД.
+          const u = typeof currentPrompt === "string" ? currentPrompt.trim() : "";
+          if (u && !chatHistory.some((t) => t.role === "user" && t.content === u)) {
+            chatHistory.push({ role: "user", content: u });
+            chatHistory.push({
+              role: "assistant",
+              content: `[Ошибка: нет ответа агента] ${err instanceof Error ? err.message : String(err)}`,
+            });
+          }
           const isTimeoutAbort =
             err instanceof Error &&
-            (err.name === "AbortError" || /abort/i.test(err.message) || /timed out/i.test(err.message));
+            (err.name === "AgentFetchTimeoutError" ||
+              err.name === "AbortError" ||
+              /abort/i.test(err.message) ||
+              /timed out/i.test(err.message) ||
+              /Превышен таймаут ожидания ответа агента/i.test(err.message));
           localDiagnostics = {
             error: err instanceof Error ? err.message : String(err),
             timeoutMs: AGENT_FETCH_TIMEOUT_MS,
