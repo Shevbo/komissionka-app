@@ -258,6 +258,20 @@ export async function POST(
             if (lastResultText.trim().length > 0) {
               chatHistory.push({ role: "assistant", content: lastResultText });
             }
+            await prisma.test_runs.update({
+              where: { id: run.id },
+              data: {
+                status: "running",
+                agent_log_id: lastAgentLogId ?? undefined,
+                conversation_log: (chatHistory.length ? chatHistory : undefined) as unknown as object,
+                steps: lastSteps ?? undefined,
+                diagnostics: {
+                  phase: "running",
+                  turn: turnIndex + 1,
+                  updatedAt: new Date().toISOString(),
+                } as unknown as object,
+              },
+            });
 
             // If agent refuses because consult-mode disables tools - it's a test failure.
             if (consultModeDisabled(lastResultText)) {
