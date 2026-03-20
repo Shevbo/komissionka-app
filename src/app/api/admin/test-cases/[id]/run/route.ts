@@ -238,10 +238,18 @@ export async function POST(
             }
 
             // Success criteria
+            const askedClarification = looksLikeClarificationQuestion(lastResultText);
             if (expectedIsUuid) {
               const item = await prisma.items.findUnique({ where: { id: expectedTextTrimmed } });
               const ok = !item;
               if (ok) {
+                if (askedClarification && turnIndex < maxChatTurns - 1) {
+                  // Даже если удаление в БД уже произошло, модель всё ещё просит уточнение.
+                  // По требованию сценариев теста — продолжаем диалог, чтобы имитация пользователя была полной.
+                  currentPrompt = buildUserReply(turnIndex);
+                  continue;
+                }
+
                 chatSuccess = true;
                 chatChecks.push({
                   name: "dbItemDeletedById",
@@ -258,6 +266,11 @@ export async function POST(
                 stepsText.includes(expectedTextTrimmed) ||
                 agentPayloadText.includes(expectedTextTrimmed);
               if (ok) {
+                if (askedClarification && turnIndex < maxChatTurns - 1) {
+                  currentPrompt = buildUserReply(turnIndex);
+                  continue;
+                }
+
                 chatSuccess = true;
                 chatChecks.push({
                   name: "containsExpectedText",
