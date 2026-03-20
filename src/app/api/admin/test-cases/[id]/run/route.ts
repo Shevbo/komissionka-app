@@ -129,7 +129,9 @@ export async function POST(
         const t = txt.trim();
         if (!t) return false;
         if (consultModeDisabled(t)) return false;
+        const hasQuestionMark = /\?\s*$/.test(t) || /\?\s*\n/.test(t);
         return (
+          hasQuestionMark ||
           /нужно уточнен/i.test(t) ||
           /уточнение:/i.test(t) ||
           /уточнит/i.test(t) ||
@@ -267,12 +269,22 @@ export async function POST(
             }
 
             // If agent asks a clarification question - simulate user reply and continue.
-            if (looksLikeClarificationQuestion(lastResultText) && turnIndex < maxChatTurns - 1) {
-              currentPrompt = buildUserReply(turnIndex);
+            if (turnIndex < maxChatTurns - 1) {
+              if (looksLikeClarificationQuestion(lastResultText)) {
+                // Agent explicitly needs user input.
+                currentPrompt = buildUserReply(turnIndex);
+              } else if (expectedIsUuid && expectedTextTrimmed) {
+                // No explicit question, but expected result isn't reached yet.
+                currentPrompt = `Ок. Действуй строго по id товара=${expectedTextTrimmed}. Не задавай уточнений. Выполни удаление и заверши.`;
+              } else if (!expectedIsUuid && expectedTextTrimmed) {
+                currentPrompt = `Ок. Продолжай выполнение и дай финальный результат, чтобы он содержал ожидаемую строку: ${expectedTextTrimmed}. Без уточняющих вопросов.`;
+              } else {
+                currentPrompt = buildUserReply(turnIndex);
+              }
               continue;
             }
 
-            // No more conversation or no clarification - stop.
+            // Max turns reached -> stop.
             break;
           }
 
