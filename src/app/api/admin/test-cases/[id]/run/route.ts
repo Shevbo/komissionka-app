@@ -129,7 +129,7 @@ export async function POST(
       const consultModeDisabled = (txt: string): boolean =>
         /режим консультации/i.test(txt) && /операц.*невозможн/i.test(txt);
 
-      const AGENT_FETCH_TIMEOUT_MS = Number(process.env.AGENT_FETCH_TIMEOUT_MS ?? "60000");
+      const AGENT_FETCH_TIMEOUT_MS = Number(process.env.AGENT_FETCH_TIMEOUT_MS ?? "180000");
 
       async function fetchJsonWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<any> {
         const controller = new AbortController();
@@ -396,13 +396,22 @@ export async function POST(
             details: "Выполнение остановлено администратором.",
           });
         } else {
+          const isTimeoutAbort =
+            err instanceof Error &&
+            (err.name === "AbortError" || /abort/i.test(err.message) || /timed out/i.test(err.message));
           localDiagnostics = {
             error: err instanceof Error ? err.message : String(err),
+            timeoutMs: AGENT_FETCH_TIMEOUT_MS,
+            timeout: isTimeoutAbort,
           };
           chatChecks.push({
-            name: "runnerError",
+            name: isTimeoutAbort ? "agentTimeout" : "runnerError",
             ok: false,
-            details: typeof localDiagnostics === "string" ? localDiagnostics : safeStringify(localDiagnostics),
+            details: isTimeoutAbort
+              ? `Превышен таймаут ожидания ответа агента (${AGENT_FETCH_TIMEOUT_MS} мс).`
+              : typeof localDiagnostics === "string"
+                ? localDiagnostics
+                : safeStringify(localDiagnostics),
           });
         }
       }
