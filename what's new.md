@@ -25,6 +25,14 @@
 
 ### ______***UPDATE***________
 
+**05.03.2026 >** Каталог тестов: копирование тест-кейса и редактирование (API + UI)
+
+**2.1 В приложении Комиссионка (web)**  
+**Копирование:** `POST /api/admin/test-cases` с телом `{ "copyFromId": "<uuid>" }` — новый кейс с `number = max(number)+1`, заголовок с суффиксом « (копия)», сброс полей обогащения спецификации ИИ. **Редактирование:** единая форма создания/редактирования в [src/components/AdminTestCatalogTab.tsx](src/components/AdminTestCatalogTab.tsx); `PUT /api/admin/test-cases` — обновление полей кейса, в т.ч. **`number`** с проверкой уникальности (**409** при конфликте). В таблице и карточке кейса — кнопки **копировать** и **редактировать**. Файл API: [src/app/api/admin/test-cases/route.ts](src/app/api/admin/test-cases/route.ts). Документация: [docs/manual/test-catalog-architecture.md](docs/manual/test-catalog-architecture.md) §6.1, §7.1, вер. 1.0.9. Core приложения (count-core-lines): **14770** строк. app v1.18.11 → v1.19.0 (минор).
+
+**2.2–2.4**  
+Без изменений. agent v1.7.14, tgbot v1.1.0.
+
 **05.03.2026 >** Багфикс: ложный success по UUID — товар уже отсутствовал в БД до прогона (прогон 36 и др.)
 
 **2.1 В приложении Комиссионка (web)**  

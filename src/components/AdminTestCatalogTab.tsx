@@ -28,7 +28,7 @@ import {
   SelectValue,
 } from "komiss/components/ui/select";
 import { toast } from "sonner";
-import { Download, Play, RefreshCw, Sparkles, Upload } from "lucide-react";
+import { Copy, Download, Pencil, Play, RefreshCw, Sparkles, Upload } from "lucide-react";
 
 type SuccessRate = { percent: number; successCount: number; totalCount: number };
 
@@ -129,8 +129,10 @@ export function AdminTestCatalogTab() {
   const [runDetail, setRunDetail] = useState<RunDetailData | null>(null);
   const [runDetailLoading, setRunDetailLoading] = useState(false);
   const [runningId, setRunningId] = useState<string | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [createSaving, setCreateSaving] = useState(false);
+  const [caseFormOpen, setCaseFormOpen] = useState(false);
+  const [caseFormMode, setCaseFormMode] = useState<"create" | "edit">("create");
+  const [editingCaseId, setEditingCaseId] = useState<string | null>(null);
+  const [caseFormSaving, setCaseFormSaving] = useState(false);
   const [formNumber, setFormNumber] = useState("");
   const [formModuleId, setFormModuleId] = useState("app");
   const [formTitle, setFormTitle] = useState("");
@@ -138,6 +140,9 @@ export function AdminTestCatalogTab() {
   const [formScope, setFormScope] = useState("agent");
   const [formKind, setFormKind] = useState("automatic");
   const [formParametersJson, setFormParametersJson] = useState("{}");
+  const [formPromptTemplate, setFormPromptTemplate] = useState("");
+  const [formExpectedResultJson, setFormExpectedResultJson] = useState("{}");
+  const [formEnabled, setFormEnabled] = useState(true);
 
   const loadModules = useCallback(async () => {
     const res = await fetch("/api/admin/test-modules", { credentials: "include" });
@@ -170,6 +175,64 @@ export function AdminTestCatalogTab() {
     void loadModules();
     void loadCases();
   }, [loadCases, loadModules]);
+
+  const resetCaseForm = () => {
+    setCaseFormMode("create");
+    setEditingCaseId(null);
+    setFormNumber("");
+    setFormModuleId("app");
+    setFormTitle("");
+    setFormDescription("");
+    setFormScope("agent");
+    setFormKind("automatic");
+    setFormParametersJson("{}");
+    setFormPromptTemplate("");
+    setFormExpectedResultJson("{}");
+    setFormEnabled(true);
+  };
+
+  const openCaseFormCreate = () => {
+    resetCaseForm();
+    setCaseFormMode("create");
+    setCaseFormOpen(true);
+  };
+
+  const openCaseFormEdit = (c: TestCaseRow) => {
+    setCaseFormMode("edit");
+    setEditingCaseId(c.id);
+    setFormNumber(String(c.number));
+    setFormModuleId(c.moduleId);
+    setFormTitle(c.title);
+    setFormDescription(c.description);
+    setFormScope(c.scope);
+    setFormKind(c.kind);
+    setFormParametersJson(JSON.stringify(c.parameters ?? {}, null, 2));
+    setFormPromptTemplate(c.promptTemplate ?? "");
+    setFormExpectedResultJson(JSON.stringify(c.expectedResult ?? {}, null, 2));
+    setFormEnabled(c.enabled);
+    setCaseFormOpen(true);
+  };
+
+  const copyTestCase = async (sourceId: string) => {
+    try {
+      const res = await fetch("/api/admin/test-cases", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ copyFromId: sourceId }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(typeof json.error === "string" ? json.error : "Не удалось скопировать");
+        return;
+      }
+      const num = (json.data as { number?: number })?.number;
+      toast.success(num != null ? `Создана копия: тест-кейс №${num}` : "Копия создана");
+      await loadCases();
+    } catch {
+      toast.error("Ошибка сети");
+    }
+  };
 
   const loadRuns = useCallback(async (testCaseId: string) => {
     setRunsLoading(true);
@@ -431,7 +494,7 @@ export function AdminTestCatalogTab() {
     }
   };
 
-  const submitCreate = async () => {
+  const submitCaseForm = async () => {
     const num = parseInt(formNumber, 10);
     if (!num || Number.isNaN(num)) {
       toast.error("Укажите корректный номер тест-кейса");
@@ -446,36 +509,78 @@ export function AdminTestCatalogTab() {
         return;
       }
     }
-    setCreateSaving(true);
-    try {
-      const res = await fetch("/api/admin/test-cases", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          number: num,
-          moduleId: formModuleId,
-          title: formTitle.trim(),
-          description: formDescription,
-          scope: formScope,
-          kind: formKind,
-          parameters,
-        }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        toast.error(json.error ?? "Не удалось создать тест-кейс");
+    let expectedResult: unknown = undefined;
+    if (formExpectedResultJson.trim()) {
+      try {
+        expectedResult = JSON.parse(formExpectedResultJson) as unknown;
+      } catch {
+        toast.error("JSON expectedResult некорректен");
         return;
       }
-      toast.success("Тест-кейс создан");
-      setCreateOpen(false);
-      setFormNumber("");
-      setFormTitle("");
-      setFormDescription("");
-      setFormParametersJson("{}");
+    }
+    setCaseFormSaving(true);
+    try {
+      if (caseFormMode === "edit" && editingCaseId) {
+        const res = await fetch("/api/admin/test-cases", {
+          method: "PUT",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: editingCaseId,
+            number: num,
+            moduleId: formModuleId,
+            title: formTitle.trim(),
+            description: formDescription,
+            scope: formScope,
+            kind: formKind,
+            parameters,
+            promptTemplate: formPromptTemplate.trim() || null,
+            expectedResult,
+            enabled: formEnabled,
+          }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          toast.error(typeof json.error === "string" ? json.error : "Не удалось сохранить");
+          return;
+        }
+        toast.success("Тест-кейс обновлён");
+      } else {
+        const res = await fetch("/api/admin/test-cases", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            number: num,
+            moduleId: formModuleId,
+            title: formTitle.trim(),
+            description: formDescription,
+            scope: formScope,
+            kind: formKind,
+            parameters,
+            promptTemplate: formPromptTemplate.trim() || null,
+            expectedResult,
+          }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          toast.error(json.error ?? "Не удалось создать тест-кейс");
+          return;
+        }
+        toast.success("Тест-кейс создан");
+      }
+      const savedEditingId = editingCaseId;
+      setCaseFormOpen(false);
+      resetCaseForm();
       await loadCases();
+      if (selectedCase && savedEditingId && selectedCase.id === savedEditingId) {
+        const list = await fetch("/api/admin/test-cases", { credentials: "include" }).then((r) => r.json());
+        const rows = (list.data ?? []) as TestCaseRow[];
+        const updated = rows.find((x) => x.id === savedEditingId);
+        if (updated) setSelectedCase(updated);
+      }
     } finally {
-      setCreateSaving(false);
+      setCaseFormSaving(false);
     }
   };
 
@@ -500,7 +605,7 @@ export function AdminTestCatalogTab() {
               <RefreshCw className={`mr-1 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
               Обновить
             </Button>
-            <Button size="sm" onClick={() => setCreateOpen(true)} disabled={modules.length === 0}>
+            <Button size="sm" onClick={() => openCaseFormCreate()} disabled={modules.length === 0}>
               Новый тест-кейс
             </Button>
           </div>
@@ -554,18 +659,36 @@ export function AdminTestCatalogTab() {
                         )}
                       </TableCell>
                       <TableCell className="text-sm">{formatSuccessRate(c.successRate)}</TableCell>
-                      <TableCell className="text-right space-x-1">
-                        <Button variant="outline" size="sm" onClick={() => setSelectedCase(c)}>
-                          Карточка
-                        </Button>
-                        <Button
-                          size="sm"
-                          disabled={runningId === c.id || !c.enabled || (c.scope === "agent" && !hasAgentExpectedText(c.parameters))}
-                          onClick={() => void runTest(c.id)}
-                        >
-                          <Play className="mr-1 h-3 w-3" />
-                          Запустить
-                        </Button>
+                      <TableCell className="text-right">
+                        <div className="flex flex-wrap justify-end gap-1">
+                          <Button variant="outline" size="sm" onClick={() => setSelectedCase(c)}>
+                            Карточка
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            title="Редактировать"
+                            onClick={() => openCaseFormEdit(c)}
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            title="Копировать"
+                            onClick={() => void copyTestCase(c.id)}
+                          >
+                            <Copy className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            disabled={runningId === c.id || !c.enabled || (c.scope === "agent" && !hasAgentExpectedText(c.parameters))}
+                            onClick={() => void runTest(c.id)}
+                          >
+                            <Play className="mr-1 h-3 w-3" />
+                            Запустить
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -675,6 +798,14 @@ export function AdminTestCatalogTab() {
                 </div>
               )}
               <div className="flex flex-wrap gap-2">
+                <Button variant="outline" onClick={() => openCaseFormEdit(selectedCase)}>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Редактировать
+                </Button>
+                <Button variant="outline" onClick={() => void copyTestCase(selectedCase.id)}>
+                  <Copy className="mr-2 h-4 w-4" />
+                  Копировать
+                </Button>
                 <Button
                   variant="outline"
                   disabled={enrichLoading}
@@ -864,10 +995,18 @@ export function AdminTestCatalogTab() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-w-lg">
+      <Dialog
+        open={caseFormOpen}
+        onOpenChange={(o) => {
+          setCaseFormOpen(o);
+          if (!o) resetCaseForm();
+        }}
+      >
+        <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Новый тест-кейс</DialogTitle>
+            <DialogTitle>
+              {caseFormMode === "edit" ? "Редактирование тест-кейса" : "Новый тест-кейс"}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div>
@@ -956,8 +1095,44 @@ export function AdminTestCatalogTab() {
                 placeholder='{"model":"...","mode":"dev","userPrompt":"...","expectedText":"..."}'
               />
             </div>
-            <Button onClick={() => void submitCreate()} disabled={createSaving}>
-              {createSaving ? "Сохранение…" : "Создать"}
+            <div>
+              <Label htmlFor="tc-prompt-tpl">Шаблон промпта (опционально)</Label>
+              <Textarea
+                id="tc-prompt-tpl"
+                value={formPromptTemplate}
+                onChange={(e) => setFormPromptTemplate(e.target.value)}
+                rows={3}
+                className="text-xs"
+                placeholder="Выполни действие: {userPrompt}…"
+              />
+            </div>
+            <div>
+              <Label htmlFor="tc-exp-res">Ожидаемый результат (JSON, опционально)</Label>
+              <Textarea
+                id="tc-exp-res"
+                value={formExpectedResultJson}
+                onChange={(e) => setFormExpectedResultJson(e.target.value)}
+                rows={4}
+                className="font-mono text-xs"
+                placeholder="{}"
+              />
+            </div>
+            {caseFormMode === "edit" && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="tc-enabled"
+                  className="h-4 w-4 rounded border"
+                  checked={formEnabled}
+                  onChange={(e) => setFormEnabled(e.target.checked)}
+                />
+                <Label htmlFor="tc-enabled" className="cursor-pointer font-normal">
+                  Кейс включён (участвует в каталоге)
+                </Label>
+              </div>
+            )}
+            <Button onClick={() => void submitCaseForm()} disabled={caseFormSaving}>
+              {caseFormSaving ? "Сохранение…" : caseFormMode === "edit" ? "Сохранить" : "Создать"}
             </Button>
           </div>
         </DialogContent>

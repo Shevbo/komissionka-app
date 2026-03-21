@@ -121,6 +121,45 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
+  const copyFromId = typeof body?.copyFromId === "string" ? body.copyFromId.trim() : "";
+  if (copyFromId) {
+    const source = await prisma.test_cases.findUnique({ where: { id: copyFromId } });
+    if (!source) {
+      return NextResponse.json({ error: "Source test case not found" }, { status: 404 });
+    }
+    const maxRow = await prisma.test_cases.aggregate({ _max: { number: true } });
+    const nextNumber = (maxRow._max.number ?? 0) + 1;
+    const baseTitle = source.title.trim();
+    const suffix = " (копия)";
+    const title =
+      baseTitle.length + suffix.length <= 255
+        ? `${baseTitle}${suffix}`
+        : `${baseTitle.slice(0, 255 - suffix.length)}${suffix}`;
+    const created = await prisma.test_cases.create({
+      data: {
+        number: nextNumber,
+        module_id: source.module_id,
+        title,
+        description: source.description,
+        kind: source.kind,
+        scope: source.scope,
+        prompt_template: source.prompt_template,
+        parameters: source.parameters ?? undefined,
+        expected_result: source.expected_result ?? undefined,
+        tags: source.tags ?? [],
+        enabled: source.enabled,
+        ui_pages: source.ui_pages ?? [],
+        api_endpoints: source.api_endpoints ?? [],
+        code_refs: source.code_refs ?? [],
+        db_entities: source.db_entities ?? [],
+        spec_enriched_by_ai: false,
+        spec_enriched_at: null,
+        spec_enriched_model: null,
+      },
+    });
+    return NextResponse.json({ data: mapTestCase({ ...created, _count: { runs: 0 } }) });
+  }
+
   const title = typeof body?.title === "string" ? body.title.trim() : "";
   const description = typeof body?.description === "string" ? body.description : "";
   const moduleId = typeof body?.moduleId === "string" ? body.moduleId.trim() : "";
@@ -183,6 +222,24 @@ export async function PUT(request: Request) {
   }
 
   const data: any = {};
+  if (body.number != null) {
+    const raw = typeof body.number === "number" ? body.number : Number(body.number);
+    const n = Math.floor(raw);
+    if (!Number.isFinite(raw) || n <= 0 || raw !== n) {
+      return NextResponse.json({ error: "number must be a positive integer" }, { status: 400 });
+    }
+    const conflict = await prisma.test_cases.findFirst({
+      where: { number: n, NOT: { id } },
+      select: { id: true },
+    });
+    if (conflict) {
+      return NextResponse.json(
+        { error: "Тест-кейс с таким номером уже существует" },
+        { status: 409 },
+      );
+    }
+    data.number = n;
+  }
   if (body.title != null) data.title = String(body.title);
   if (body.description != null) data.description = String(body.description);
   if (body.moduleId != null) data.module_id = String(body.moduleId);
