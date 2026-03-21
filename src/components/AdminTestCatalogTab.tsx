@@ -28,7 +28,7 @@ import {
   SelectValue,
 } from "komiss/components/ui/select";
 import { toast } from "sonner";
-import { Play, RefreshCw, Sparkles } from "lucide-react";
+import { Download, Play, RefreshCw, Sparkles, Upload } from "lucide-react";
 
 type SuccessRate = { percent: number; successCount: number; totalCount: number };
 
@@ -257,6 +257,59 @@ export function AdminTestCatalogTab() {
       if (runDetail?.id === runId) await openRunDetail(runId);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Ошибка остановки прогона");
+    }
+  };
+
+  const downloadRunExportJson = async (id: string) => {
+    try {
+      const res = await fetch(`/api/admin/test-cases/runs/export/${id}`, { credentials: "include" });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        toast.error((json as { error?: string }).error ?? "Не удалось скачать экспорт");
+        return;
+      }
+      const blob = await res.blob();
+      const cd = res.headers.get("Content-Disposition");
+      let filename = `test-run-${id}.json`;
+      const m = cd?.match(/filename="([^"]+)"/);
+      if (m?.[1]) filename = m[1];
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("JSON скачан — прикрепите к чату ИИ или загрузите в облако");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Ошибка скачивания");
+    }
+  };
+
+  const sendRunExportWebhook = async (id: string) => {
+    try {
+      const res = await fetch(`/api/admin/test-cases/runs/export/${id}/webhook`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        hint?: string;
+        ok?: boolean;
+        webhookStatus?: number;
+        webhookSnippet?: string;
+      };
+      if (res.status === 501) {
+        toast.message(json.hint ?? json.error ?? "Вебхук не настроен (TEST_RUN_EXPORT_WEBHOOK_URL)");
+        return;
+      }
+      if (!res.ok) {
+        toast.error(json.error ?? `Ошибка ${res.status}`);
+        return;
+      }
+      if (json.ok) toast.success(`Вебхук принял: HTTP ${json.webhookStatus ?? "?"}`);
+      else toast.warning(json.webhookSnippet?.slice(0, 120) ?? "Вебхук вернул ошибку");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Ошибка отправки");
     }
   };
 
@@ -698,11 +751,28 @@ export function AdminTestCatalogTab() {
 
       <Dialog open={runDetailOpen} onOpenChange={setRunDetailOpen}>
         <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
-          <DialogHeader>
+          <DialogHeader className="space-y-3">
             <DialogTitle>
               Прогон #{runDetail?.runNumber ?? "—"}{" "}
               {runDetail?.testCase ? `(кейс №${runDetail.testCase.number})` : ""}
             </DialogTitle>
+            {!runDetailLoading && runDetail && (
+              <div className="flex flex-wrap gap-2 border-b pb-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => void downloadRunExportJson(runDetail.id)}
+                >
+                  <Download className="mr-1 h-4 w-4" />
+                  Скачать JSON для ИИ
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => void sendRunExportWebhook(runDetail.id)}>
+                  <Upload className="mr-1 h-4 w-4" />
+                  Отправить на вебхук
+                </Button>
+              </div>
+            )}
           </DialogHeader>
           {runDetailLoading && <p className="text-muted-foreground">Загрузка…</p>}
           {!runDetailLoading && runDetail && (

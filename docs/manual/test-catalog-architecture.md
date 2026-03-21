@@ -1,4 +1,4 @@
-Рабочая документация: универсальный каталог тест‑кейсов вер. 1.0.3
+Рабочая документация: универсальный каталог тест‑кейсов вер. 1.0.5
 
 ## Оглавление
 
@@ -7,7 +7,7 @@
 3. Типы тестов и сценариев
 4. Каталог тест‑кейсов (структура хранения)
 5. История прогонов и артефакты
-6. API и механика запуска (в т.ч. §6.3 переменные окружения)
+6. API и механика запуска (в т.ч. §6.3 переменные окружения, §6.4 экспорт прогона для ИИ)
 7. Интеграция с UI админки
 8. Интеграция с ИИ‑агентом (запуск тестов по командам)
 9. Этапы реализации
@@ -273,6 +273,24 @@
 Раннер передаёт в агент `environment: "test-runner"`, **`disableCache: true`** и поле `history` с репликами; в агенте при подготовке истории для LLM с ответов ассистента снимается **подвал отчёта** (метрики/версии), чтобы следующий ход не «тонул» в служебном тексте. Для `test-runner` в ядре агента **отключён** radical DEV-guard у `tool_calls` (имитация пользователя в раннере заменяет живой диалог; эвристики «уточнения» не должны блокировать инструменты).
 
 **Просмотр полной истории прогона (для отладки):** `GET /api/admin/test-cases/runs/detail/[runId]` (админ-сессия) — в ответе `conversationLog`, `steps`, `diagnostics`, `agentLogId`; полный лог рассуждений агента — `GET /api/admin/agent/log?logId=...` по `agentLogId` последнего хода.
+
+### 6.4. Экспорт прогона для ИИ и внешних сервисов («файлообмен»)
+
+ИИ‑ассистенты не имеют прямого доступа к вашей БД. Чтобы передать **полный контекст** прогона (кейс, шаги, диалог, сравнение, диагностика, ссылки на лог агента):
+
+- **`GET /api/admin/test-cases/runs/export/[runId]`** (только админ, cookie‑сессия) — ответ `application/json` с заголовком `Content-Disposition: attachment`, тело: единый JSON (`schemaVersion`, `run`, `testCase`, `links`, подсказка `hint`). Сборка: [src/lib/test-run-export.ts](src/lib/test-run-export.ts), маршрут: [src/app/api/admin/test-cases/runs/export/[runId]/route.ts](src/app/api/admin/test-cases/runs/export/[runId]/route.ts). При открытии выполняется та же **stale**‑финализация «зависших» прогонов, что и для `detail`.
+- В UI: вкладка тестов — диалог **деталей прогона** ([src/components/AdminTestCatalogTab.tsx](src/components/AdminTestCatalogTab.tsx)): кнопки **«Скачать JSON для ИИ»** и **«Отправить на вебхук»** в **шапке** диалога сразу под заголовком «Прогон #…»; страница [src/app/admin/test-runs/[runId]/interactive/page.tsx](src/app/admin/test-runs/[runId]/interactive/page.tsx) — «JSON для ИИ» / «На вебхук».
+
+**Вебхук (Zapier, Make, n8n, свой HTTP‑приёмник, доставка в мессенджер и т.п.):**
+
+- **`POST /api/admin/test-cases/runs/export/[runId]/webhook`** — тело запроса на внешний URL — тот же JSON, что и в файле экспорта (без pretty‑print). Маршрут: [src/app/api/admin/test-cases/runs/export/[runId]/webhook/route.ts](src/app/api/admin/test-cases/runs/export/[runId]/webhook/route.ts).
+
+| Переменная | Назначение |
+|------------|------------|
+| `TEST_RUN_EXPORT_WEBHOOK_URL` | URL для `POST` с JSON (обязателен для работы кнопки «На вебхук») |
+| `TEST_RUN_EXPORT_WEBHOOK_BEARER` | Необязательно: `Authorization: Bearer …` к вебхуку |
+
+Секреты из `.env` в экспорт **не попадают**; в JSON есть только данные прогона/кейса и публичные ссылки приложения (`NEXTAUTH_URL` / заголовки запроса для `links`).
 
 ---
 

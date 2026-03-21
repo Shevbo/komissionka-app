@@ -25,10 +25,21 @@
 
 ### ______***UPDATE***________
 
+**05.03.2026 >** Где кнопка экспорта прогона — перенос «Скачать JSON для ИИ» / «На вебхук» под заголовок диалога
+
+**2.1 В приложении Комиссионка (web)**  
+В диалоге **деталей прогона** кнопки **«Скачать JSON для ИИ»** и **«Отправить на вебхук»** перенесены в **шапку** (`DialogHeader`) сразу под заголовком «Прогон #…», чтобы они были видны без прокрутки и не терялись на старых скриншотах/узком окне. Дубликат в середине карточки убран. Файл: [src/components/AdminTestCatalogTab.tsx](src/components/AdminTestCatalogTab.tsx). Документация: [docs/manual/test-catalog-architecture.md](docs/manual/test-catalog-architecture.md) — §6.4, вер. 1.0.5. Всего core приложения (count-core-lines): **14806** строк. app v1.18.6 → v1.18.7 (патч, UX).
+
+**2.2 В сервисе Агент к модели ИИ**  
+Без изменений. agent v1.7.12.
+
+**2.3–2.4**  
+Без изменений. tgbot v1.1.0.
+
 **21.03.2026 >** Багфикс: прогоны каталога тестов (№31) — полное отключение radical DEV-guard для test-runner
 
 **2.1 В приложении Комиссионка (web)**  
-Без изменений. app v1.18.6.
+Без изменений. app v1.18.7.
 
 **2.2 В сервисе Агент к модели ИИ**  
 При `environment === "test-runner"` блок **`tool_calls` больше не проходит** через radical DEV-guard (эвристика уточнений). Раннер сам шлёт имитацию пользователя; guard остаётся для админки/Telegram и др. В `runAgent` в `runAgentCore` пробрасывается **`environment`**. Файлы: [agent/core.ts](agent/core.ts), [agent/contract.ts](agent/contract.ts). Документация: [docs/manual/test-catalog-architecture.md](docs/manual/test-catalog-architecture.md) — как смотреть полный прогон через detail API и `agentLogId`. Core агента (count-core-lines): 3973 строки. agent v1.7.11 → v1.7.12 (патч).
