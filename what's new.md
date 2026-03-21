@@ -25,6 +25,14 @@
 
 ### ______***UPDATE***________
 
+**05.03.2026 >** Багфикс: ложный success по UUID — товар уже отсутствовал в БД до прогона (прогон 36 и др.)
+
+**2.1 В приложении Комиссионка (web)**  
+Для `scope=agent` и `expectedText` в виде UUID (проверка удаления в `items`): успех **`dbItemDeletedById`** только если запись **была в БД до старта прогона** и **исчезла к концу**; иначе `!item` давало ложный успех без второго хода диалога. Добавлена проверка **`expectedItemNotPresentAtRunStart`** (прогон без вызова агента, если товара уже нет). В успехе в `diagnostics`: `itemExistedAtRunStart`, `uuidDeleteVerified`. Файл: [src/app/api/admin/test-cases/[id]/run/route.ts](src/app/api/admin/test-cases/[id]/run/route.ts). Документация: [docs/manual/test-catalog-architecture.md](docs/manual/test-catalog-architecture.md) §6.3, вер. 1.0.8. Core приложения: **14713** строк (count-core-lines). app v1.18.10 → v1.18.11 (патч).
+
+**2.2–2.4**  
+Без изменений. agent v1.7.14, tgbot v1.1.0.
+
 **05.03.2026 >** Багфикс: путаница «итерация 40» — внутренний цикл LLM+tools, а не ход диалога раннера; правило «диагностика от пользователя = ошибка»
 
 **2.1 В приложении Комиссионка (web)**  

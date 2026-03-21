@@ -131,6 +131,8 @@ export async function POST(
       const chatChecks: Array<{ name: string; ok: boolean; details?: string }> = [];
       let localDiagnostics: unknown = null;
       let cancelledByAdmin = false;
+      /** Для expectedText=UUID: была ли запись в items до прогона (обязательно для засчитывания удаления). */
+      let itemExistedAtRunStart = true;
 
       const consultModeDisabled = (txt: string): boolean =>
         /режим консультации/i.test(txt) && /операц.*невозможн/i.test(txt);
@@ -220,6 +222,29 @@ export async function POST(
             hint: "См. test_cases.parameters для тест‑кейса: expectedText должен быть строкой.",
           };
         } else {
+          /** Для UUID: успех «удалено» имеет смысл только если запись была в БД до прогона (иначе ложный success). */
+          let skipAgentLoop = false;
+          if (expectedIsUuid && expectedTextTrimmed) {
+            const rowBefore = await prisma.items.findUnique({ where: { id: expectedTextTrimmed } });
+            itemExistedAtRunStart = !!rowBefore;
+            if (!itemExistedAtRunStart) {
+              skipAgentLoop = true;
+              chatSuccess = false;
+              chatChecks.push({
+                name: "expectedItemNotPresentAtRunStart",
+                ok: false,
+                details:
+                  "Запись items с id из expectedText отсутствовала в БД до начала прогона — удаление в этом прогоне не проверено. Создайте или восстановите тестовую запись с этим id.",
+              });
+              localDiagnostics = {
+                expectedItemNotPresentAtRunStart: true,
+                expectedItemId: expectedTextTrimmed,
+                hint: "Перед прогоном товар с ожидаемым UUID должен существовать в таблице items.",
+              };
+            }
+          }
+
+          if (!skipAgentLoop) {
           for (let turnIndex = 0; turnIndex < maxChatTurns; turnIndex++) {
             if (Date.now() - agentRunStartedAt > TEST_RUN_MAX_MS) {
               chatSuccess = false;
@@ -363,11 +388,11 @@ export async function POST(
               break;
             }
 
-            // Критерий успеха: для UUID — запись удалена из БД; иначе — подстрока в ответе/steps/payload.
+            // Критерий успеха: для UUID — запись исчезла из БД после того как существовала до прогона; иначе — подстрока в ответе/steps/payload.
             let goalMet = false;
             if (expectedIsUuid) {
               const item = await prisma.items.findUnique({ where: { id: expectedTextTrimmed } });
-              goalMet = !item;
+              goalMet = Boolean(itemExistedAtRunStart) && !item;
             } else {
               const stepsText = safeStringify(lastSteps);
               const agentPayloadText = safeStringify(data);
@@ -402,20 +427,23 @@ export async function POST(
             currentPrompt = buildSimulatedUserReply(turnIndex);
             continue;
           }
+          }
 
           if (!chatSuccess) {
             if (expectedIsUuid) {
-              const item = await prisma.items.findUnique({ where: { id: expectedTextTrimmed } });
-              chatChecks.push({
-                name: "dbItemDeletedById",
-                ok: false,
-                details: item ? "Запись в items по ожидаемому id всё ещё существует." : undefined,
-              });
-              localDiagnostics = {
-                dbItemStillExists: Boolean(item),
-                expectedItemId: expectedTextTrimmed,
-                lastAgentResultSnippet: lastResultText.slice(0, 2000),
-              };
+              if (!chatChecks.some((c) => c.name === "expectedItemNotPresentAtRunStart")) {
+                const item = await prisma.items.findUnique({ where: { id: expectedTextTrimmed } });
+                chatChecks.push({
+                  name: "dbItemDeletedById",
+                  ok: false,
+                  details: item ? "Запись в items по ожидаемому id всё ещё существует." : undefined,
+                });
+                localDiagnostics = {
+                  dbItemStillExists: Boolean(item),
+                  expectedItemId: expectedTextTrimmed,
+                  lastAgentResultSnippet: lastResultText.slice(0, 2000),
+                };
+              }
             } else {
               chatChecks.push({
                 name: "containsExpectedText",
@@ -483,6 +511,14 @@ export async function POST(
       };
 
       status = cancelledByAdmin ? "cancelled" : chatSuccess ? "success" : "failed";
+      if (chatSuccess && expectedIsUuid && itemExistedAtRunStart) {
+        localDiagnostics = {
+          ...(typeof localDiagnostics === "object" && localDiagnostics ? localDiagnostics : {}),
+          itemExistedAtRunStart: true,
+          uuidDeleteVerified:
+            "Запись с id из expectedText существовала до прогона и отсутствует после — удаление в этом прогоне засчитано осмысленно.",
+        };
+      }
       diagnostics = localDiagnostics;
       steps = lastSteps ?? undefined;
       agentLogId = lastAgentLogId ?? null;
