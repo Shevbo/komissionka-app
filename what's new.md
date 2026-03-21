@@ -25,6 +25,17 @@
 
 ### ______***UPDATE***________
 
+**05.03.2026 >** Экспорт прогона для ИИ: API + кнопки на интерактиве (незакоммиченное ранее)
+
+**2.1 В приложении Комиссионка (web)**  
+Добавлены **`GET /api/admin/test-cases/runs/export/[runId]`** (скачивание JSON) и **`POST …/export/[runId]/webhook`** (прокидывание того же JSON на URL из `TEST_RUN_EXPORT_WEBHOOK_URL`). Модуль [src/lib/test-run-export.ts](src/lib/test-run-export.ts). На странице [src/app/admin/test-runs/[runId]/interactive/page.tsx](src/app/admin/test-runs/[runId]/interactive/page.tsx) — кнопки **«JSON для ИИ»** и **«На вебхук»**. Документация: [docs/manual/test-catalog-architecture.md](docs/manual/test-catalog-architecture.md) §6.4. Core приложения (count-core-lines): **14806** строк. app v1.18.7 → v1.18.8 (минор).
+
+**2.2 В сервисе Агент к модели ИИ**  
+Без изменений. agent v1.7.12.
+
+**2.3–2.4**  
+Без изменений. tgbot v1.1.0.
+
 **05.03.2026 >** Где кнопка экспорта прогона — перенос «Скачать JSON для ИИ» / «На вебхук» под заголовок диалога
 
 **2.1 В приложении Комиссионка (web)**  
@@ -39,7 +50,7 @@
 **21.03.2026 >** Багфикс: прогоны каталога тестов (№31) — полное отключение radical DEV-guard для test-runner
 
 **2.1 В приложении Комиссионка (web)**  
-Без изменений. app v1.18.7.
+Без изменений. app v1.18.8.
 
 **2.2 В сервисе Агент к модели ИИ**  
 При `environment === "test-runner"` блок **`tool_calls` больше не проходит** через radical DEV-guard (эвристика уточнений). Раннер сам шлёт имитацию пользователя; guard остаётся для админки/Telegram и др. В `runAgent` в `runAgentCore` пробрасывается **`environment`**. Файлы: [agent/core.ts](agent/core.ts), [agent/contract.ts](agent/contract.ts). Документация: [docs/manual/test-catalog-architecture.md](docs/manual/test-catalog-architecture.md) — как смотреть полный прогон через detail API и `agentLogId`. Core агента (count-core-lines): 3973 строки. agent v1.7.11 → v1.7.12 (патч).

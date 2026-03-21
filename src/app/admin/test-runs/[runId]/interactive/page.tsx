@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
+import { Button } from "komiss/components/ui/button";
+import { toast } from "sonner";
+import { Download, Upload } from "lucide-react";
 
 type ChatTurn = { role: string; content: string };
 
@@ -32,6 +35,68 @@ export default function TestRunInteractivePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [run, setRun] = useState<RunDetailData | null>(null);
+  const [exportBusy, setExportBusy] = useState(false);
+
+  const downloadRunExportJson = useCallback(async () => {
+    if (!runId) return;
+    setExportBusy(true);
+    try {
+      const res = await fetch(`/api/admin/test-cases/runs/export/${runId}`, { credentials: "include" });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        toast.error((json as { error?: string }).error ?? "Не удалось скачать экспорт");
+        return;
+      }
+      const blob = await res.blob();
+      const cd = res.headers.get("Content-Disposition");
+      let filename = `test-run-${runId}.json`;
+      const m = cd?.match(/filename="([^"]+)"/);
+      if (m?.[1]) filename = m[1];
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("JSON скачан");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Ошибка");
+    } finally {
+      setExportBusy(false);
+    }
+  }, [runId]);
+
+  const sendRunExportWebhook = useCallback(async () => {
+    if (!runId) return;
+    setExportBusy(true);
+    try {
+      const res = await fetch(`/api/admin/test-cases/runs/export/${runId}/webhook`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        hint?: string;
+        ok?: boolean;
+        webhookStatus?: number;
+        webhookSnippet?: string;
+      };
+      if (res.status === 501) {
+        toast.message(json.hint ?? json.error ?? "Вебхук не настроен");
+        return;
+      }
+      if (!res.ok) {
+        toast.error(json.error ?? `Ошибка ${res.status}`);
+        return;
+      }
+      if (json.ok) toast.success(`Вебхук: HTTP ${json.webhookStatus ?? "?"}`);
+      else toast.warning(json.webhookSnippet?.slice(0, 120) ?? "Ошибка вебхука");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Ошибка");
+    } finally {
+      setExportBusy(false);
+    }
+  }, [runId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,7 +136,21 @@ export default function TestRunInteractivePage() {
 
   return (
     <main className="mx-auto max-w-4xl p-4 md:p-6">
-      <h1 className="text-xl font-semibold">Интерактив прогона</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-xl font-semibold">Интерактив прогона</h1>
+        {runId && (
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" size="sm" disabled={exportBusy} onClick={() => void downloadRunExportJson()}>
+              <Download className="mr-1 h-4 w-4" />
+              JSON для ИИ
+            </Button>
+            <Button type="button" variant="outline" size="sm" disabled={exportBusy} onClick={() => void sendRunExportWebhook()}>
+              <Upload className="mr-1 h-4 w-4" />
+              На вебхук
+            </Button>
+          </div>
+        )}
+      </div>
       {loading && <p className="mt-3 text-sm text-muted-foreground">Загрузка…</p>}
       {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
       {run && (
