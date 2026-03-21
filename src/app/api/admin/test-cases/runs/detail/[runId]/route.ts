@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "komiss/lib/auth";
 import { prisma } from "komiss/lib/prisma";
+import { isTestRunStaleRunning, staleRunMergedFinalizeData } from "komiss/lib/test-run-config";
 
 async function requireAdmin(): Promise<boolean> {
   const session = await getServerSession(authOptions);
@@ -20,7 +21,7 @@ export async function GET(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const { runId } = await context.params;
-  const run = await prisma.test_runs.findUnique({
+  let run = await prisma.test_runs.findUnique({
     where: { id: runId },
     include: {
       test_case: {
@@ -36,6 +37,30 @@ export async function GET(
 
   if (!run) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  if (isTestRunStaleRunning(run.status, run.started_at)) {
+    await prisma.test_runs.update({
+      where: { id: run.id },
+      data: staleRunMergedFinalizeData(run.diagnostics) as object,
+    });
+    const refreshed = await prisma.test_runs.findUnique({
+      where: { id: runId },
+      include: {
+        test_case: {
+          select: {
+            id: true,
+            number: true,
+            title: true,
+            module_id: true,
+          },
+        },
+      },
+    });
+    if (!refreshed) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    run = refreshed;
   }
 
   return NextResponse.json({

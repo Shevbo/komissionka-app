@@ -25,6 +25,21 @@
 
 ### ______***UPDATE***________
 
+**05.03.2026 >** Багфикс: «вечный» статус running у прогона (часы без диалога) — авто-закрытие протухших прогонов
+
+**2.1 В приложении Комиссионка (web)**  
+Прогон мог оставаться `running` без `finished_at`, если процесс Next.js был перезапущен или HTTP-запрос раннера оборван: финальный `update` в БД не выполнялся. Добавлено:  
+1) **Авто-финализация** записей `status=running`, у которых `started_at` старше порога (`TEST_RUN_STALE_AFTER_MS`, по умолчанию **2 ч**): при открытии списка тестов (`GET /api/admin/test-cases`), истории прогонов кейса или карточки прогона прогон переводится в **`failed`** с `diagnostics.staleRun` и проверкой `staleRunAutoFinalized`.  
+2) Модуль [src/lib/test-run-config.ts](src/lib/test-run-config.ts): безопасные границы для `AGENT_FETCH_TIMEOUT_MS`, `TEST_RUN_MAX_MS`, `TEST_API_FETCH_TIMEOUT_MS` (защита от пустого env / некорректных чисел).  
+3) Для **scope=api** внутренний `fetch` к приложению выполняется с **таймаутом** (`fetchWithTimeoutRace`, по умолчанию 120 с через `TEST_API_FETCH_TIMEOUT_MS`).  
+Файлы: [src/lib/test-run-config.ts](src/lib/test-run-config.ts), [src/app/api/admin/test-cases/route.ts](src/app/api/admin/test-cases/route.ts), [src/app/api/admin/test-cases/runs/[testCaseId]/route.ts](src/app/api/admin/test-cases/runs/[testCaseId]/route.ts), [src/app/api/admin/test-cases/runs/detail/[runId]/route.ts](src/app/api/admin/test-cases/runs/detail/[runId]/route.ts), [src/app/api/admin/test-cases/[id]/run/route.ts](src/app/api/admin/test-cases/[id]/run/route.ts). Всего core приложения (count-core-lines): 14384 строк. app v1.18.4 → v1.18.5 (патч).
+
+**2.2 В сервисе Агент к модели ИИ**  
+Без изменений. agent v1.7.8.
+
+**2.3–2.4**  
+Без изменений. tgbot v1.1.0.
+
 **05.03.2026 >** Багфикс: при ошибке/таймауте агента интерактив не теряет последний ход в `conversation_log`
 
 **2.1 В приложении Комиссионка (web)**  

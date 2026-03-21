@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "komiss/lib/auth";
 import { prisma } from "komiss/lib/prisma";
+import { getTestRunStaleAfterMs, staleRunBulkFinalizeData } from "komiss/lib/test-run-config";
 
 async function requireAdmin(): Promise<boolean> {
   const session = await getServerSession(authOptions);
@@ -20,6 +21,18 @@ export async function GET(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const { testCaseId } = await context.params;
+
+  const staleMs = getTestRunStaleAfterMs();
+  const staleCutoff = new Date(Date.now() - staleMs);
+  await prisma.test_runs.updateMany({
+    where: {
+      test_case_id: testCaseId,
+      status: "running",
+      started_at: { lt: staleCutoff },
+    },
+    data: staleRunBulkFinalizeData() as object,
+  });
+
   const runs = await prisma.test_runs.findMany({
     where: { test_case_id: testCaseId },
     orderBy: { started_at: "desc" },

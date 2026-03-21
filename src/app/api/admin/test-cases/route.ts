@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "komiss/lib/auth";
 import { prisma } from "komiss/lib/prisma";
+import { getTestRunStaleAfterMs, staleRunBulkFinalizeData } from "komiss/lib/test-run-config";
 
 function mapTestCase(row: any) {
   return {
@@ -50,6 +51,13 @@ export async function GET(request: Request) {
   if (!isAdmin) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  const staleMs = getTestRunStaleAfterMs();
+  const staleCutoff = new Date(Date.now() - staleMs);
+  await prisma.test_runs.updateMany({
+    where: { status: "running", started_at: { lt: staleCutoff } },
+    data: staleRunBulkFinalizeData() as object,
+  });
 
   const [cases, runStats] = await Promise.all([
     prisma.test_cases.findMany({

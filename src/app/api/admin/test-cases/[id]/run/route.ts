@@ -4,6 +4,12 @@ import { authOptions } from "komiss/lib/auth";
 import { prisma } from "komiss/lib/prisma";
 import { ALL_AGENT_MODELS, type AgentModelOption } from "komiss/lib/agent-models";
 import { registerTestRunController, unregisterTestRunController } from "komiss/lib/test-run-control";
+import {
+  getAgentFetchTimeoutMs,
+  getTestRunMaxWallMs,
+  getTestApiInternalFetchTimeoutMs,
+  fetchWithTimeoutRace,
+} from "komiss/lib/test-run-config";
 
 const AGENT_PORT = process.env.AGENT_PORT ?? "3140";
 const AGENT_API_KEY = process.env.AGENT_API_KEY;
@@ -129,9 +135,9 @@ export async function POST(
       const consultModeDisabled = (txt: string): boolean =>
         /режим консультации/i.test(txt) && /операц.*невозможн/i.test(txt);
 
-      const AGENT_FETCH_TIMEOUT_MS = Number(process.env.AGENT_FETCH_TIMEOUT_MS ?? "180000");
+      const AGENT_FETCH_TIMEOUT_MS = getAgentFetchTimeoutMs();
       /** Жёсткий лимит на весь прогон (несколько ходов), чтобы не зависать в running часами. */
-      const TEST_RUN_MAX_MS = Number(process.env.TEST_RUN_MAX_MS ?? String(25 * 60 * 1000));
+      const TEST_RUN_MAX_MS = getTestRunMaxWallMs();
       const agentRunStartedAt = Date.now();
 
       /**
@@ -690,11 +696,16 @@ export async function POST(
       const expectedSubstring =
         typeof paramsJson.expectedSubstring === "string" ? paramsJson.expectedSubstring : null;
 
-      const res = await fetch(`${APP_INTERNAL_BASE_URL}${url}`, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: method === "GET" || method === "HEAD" ? undefined : JSON.stringify(paramsJson.body ?? {}),
-      });
+      const apiFetchMs = getTestApiInternalFetchTimeoutMs();
+      const res = await fetchWithTimeoutRace(
+        `${APP_INTERNAL_BASE_URL}${url}`,
+        {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: method === "GET" || method === "HEAD" ? undefined : JSON.stringify(paramsJson.body ?? {}),
+        },
+        apiFetchMs,
+      );
 
       const text = await res.text();
       const checks: Array<{ name: string; ok: boolean; details?: string }> = [];
