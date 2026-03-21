@@ -1,4 +1,6 @@
 ______***UPDATE***________
+21.03.2026 — v1.7.12 — При environment=test-runner radical DEV-guard для tool_calls отключён; environment пробрасывается в runAgentCore из contract.
+______***UPDATE***________
 21.03.2026 — v1.7.11 — DEV radical guard: если в history уже есть ответ assistant (второй и далее HTTP-ход), tool_calls не блокируются эвристикой «не было уточнения» — иначе ломались многоходовые прогоны каталога тестов.
 ______***UPDATE***________
 21.03.2026 — v1.7.10 — История в LLM: перед повторной подачей реплик ассистента снимается подвал отчёта (stripAgentReportFooter), чтобы многоходовый чат не засыпался метриками. serve: нестриминговый POST /run пробрасывает disableCache в runAgent.

@@ -25,6 +25,17 @@
 
 ### ______***UPDATE***________
 
+**21.03.2026 >** Багфикс: прогоны каталога тестов (№31) — полное отключение radical DEV-guard для test-runner
+
+**2.1 В приложении Комиссионка (web)**  
+Без изменений. app v1.18.6.
+
+**2.2 В сервисе Агент к модели ИИ**  
+При `environment === "test-runner"` блок **`tool_calls` больше не проходит** через radical DEV-guard (эвристика уточнений). Раннер сам шлёт имитацию пользователя; guard остаётся для админки/Telegram и др. В `runAgent` в `runAgentCore` пробрасывается **`environment`**. Файлы: [agent/core.ts](agent/core.ts), [agent/contract.ts](agent/contract.ts). Документация: [docs/manual/test-catalog-architecture.md](docs/manual/test-catalog-architecture.md) — как смотреть полный прогон через detail API и `agentLogId`. Core агента (count-core-lines): 3973 строки. agent v1.7.11 → v1.7.12 (патч).
+
+**2.3–2.4**  
+Без изменений. tgbot v1.1.0.
+
 **21.03.2026 >** Багфикс: прогон каталога тестов (№27) — второй ход снова без эффекта из-за DEV guard
 
 **2.1 В приложении Комиссионка (web)**  

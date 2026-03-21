@@ -203,6 +203,7 @@ export async function runAgent(
         inputImages: options?.inputImages,
         footerVersions: options?.footerVersions,
         forceSystemPrompt: forceFresh,
+        environment: options?.environment,
       }),
       timeoutMs
     );

@@ -88,6 +88,11 @@ export interface RunAgentCoreOptions {
    * Используется для force-fresh запросов (промпт с '!'), чтобы гарантировать актуальный контекст и правила инструментов.
    */
   forceSystemPrompt?: boolean;
+  /**
+   * Среда вызова (как в HTTP body): для `test-runner` отключается radical DEV-guard у tool_calls —
+   * раннер каталога тестов сам имитирует ответы пользователя, эвристики «было ли уточнение» ломают 2+ ход.
+   */
+  environment?: string;
 }
 
 /** Формат префикса ответа ИИ: "Модель [Режим] объём_опыта> " — защита от путаницы с моделями. */
@@ -446,7 +451,8 @@ export async function runAgentCore(
       // RADICAL GUARD: в режиме "разработка" запрещаем любые tool-вызовы, пока модель не задала
       // хотя бы один уточняющий вопрос пользователю. Это гарантирует, что агент не пойдёт "вслепую"
       // и не начнёт выполнять запреты вроде sed/run_command до уточнения требований.
-      if (mode === "dev") {
+      // Каталог тестов: environment=test-runner — guard отключён целиком (имитация пользователя и сценарий детерминированы).
+      if (mode === "dev" && options?.environment !== "test-runner") {
         const responseText = String(response.content ?? "");
         const hasAnyClarifyingQuestionInHistory = historyTurns
           .slice()
