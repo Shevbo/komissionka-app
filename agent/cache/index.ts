@@ -76,6 +76,8 @@ export async function findSimilar(
     where: {
       project: metadata.project,
       mode: metadata.mode,
+      environment: metadata.environment,
+      history_turns: metadata.historyTurns,
       ...(metadata.userAccount ? { user_account: metadata.userAccount } : {}),
       ...(metadata.llmModel ? { llm_model: metadata.llmModel } : {}),
     },

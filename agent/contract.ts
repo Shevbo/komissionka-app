@@ -120,8 +120,13 @@ export async function runAgent(
   const isBacklogPrompt =
     (typeof options?.chatName === "string" && options.chatName.startsWith("backlog:")) ||
     (options?.project === "Комиссионка backlog");
+  const historyLen = options?.history?.length ?? 0;
+  /** Кэш ключуется только по тексту prompt — при ненулевой истории попадание даёт ответ без учёта диалога (баг прогонов каталога тестов). */
   const disableCache =
-    options?.disableCache === true || isBacklogPrompt;
+    options?.disableCache === true ||
+    isBacklogPrompt ||
+    environment === "test-runner" ||
+    historyLen > 0;
 
   const metadata: CacheMetadata = {
     project,
