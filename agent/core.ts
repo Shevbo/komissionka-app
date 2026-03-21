@@ -45,7 +45,7 @@ export interface AgentStep {
   text: string;
   /** Детали (имя инструмента, путь и т.д.). */
   detail?: string;
-  /** Для llm: фрагмент запроса к модели (промпт или «итерация N»). */
+  /** Для llm: фрагмент запроса к модели (промпт или внутренний шаг LLM+tools). */
   requestSummary?: string;
   /** Для tool: имя инструмента. */
   toolName?: string;
@@ -363,8 +363,8 @@ export async function runAgentCore(
   appendLog(prompt.length > MAX_DUMP_IN_LOG ? prompt.slice(0, MAX_DUMP_IN_LOG) + `\n...[обрезано, всего ${prompt.length} симв.]` : prompt);
   pushStep({
     type: "llm",
-    text: "Запрос к модели",
-    detail: `Ввод: ${initInputChars} симв., ${messages.length} сообщений в контексте`,
+    text: "Запрос к модели (старт внутреннего цикла)",
+    detail: `Ввод: ${initInputChars} симв., ${messages.length} сообщений в контексте. Дальше — шаги LLM↔инструменты в рамках одного HTTP-запроса к агенту (не путать с ходами чата/раннера).`,
     requestSummary: `Промпт (${prompt.length} симв.): ${prompt.slice(0, 1200)}${prompt.length > 1200 ? "…" : ""}`,
   });
 
@@ -379,12 +379,17 @@ export async function runAgentCore(
   while (iterations < MAX_TOOL_ITERATIONS) {
     iterations++;
     const totalChars = messages.reduce((s, m) => s + (typeof m.content === "string" ? m.content.length : 0), 0);
-    appendLog(`--- Итерация ${iterations} --- Контекст: ${messages.length} сообщений, ~${totalChars} символов`);
+    appendLog(
+      `--- Внутренний шаг LLM+tools ${iterations}/${MAX_TOOL_ITERATIONS} (не ход диалога с пользователем) --- Контекст: ${messages.length} сообщений, ~${totalChars} символов`,
+    );
     pushStep({
       type: "llm",
-      text: `Обращение к модели (итерация ${iterations})`,
-      detail: `Контекст: ${messages.length} сообщ., ~${totalChars} симв.`,
-      requestSummary: iterations === 1 ? `Промпт: ${prompt.slice(0, 1000)}${prompt.length > 1000 ? "…" : ""}` : `Итерация ${iterations}: в контексте учтены ответ модели и результаты инструментов`,
+      text: `LLM+инструменты: внутренний шаг ${iterations}/${MAX_TOOL_ITERATIONS} (один запрос к агенту)`,
+      detail: `Контекст: ${messages.length} сообщ., ~${totalChars} симв. Это не «итерация чата» и не ход раннера каталога тестов.`,
+      requestSummary:
+        iterations === 1
+          ? `Промпт: ${prompt.slice(0, 1000)}${prompt.length > 1000 ? "…" : ""}`
+          : `Внутр. шаг ${iterations}: ответ модели и результаты инструментов в одном запросе`,
     });
 
     let response: Awaited<ReturnType<typeof request>>;

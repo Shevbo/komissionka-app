@@ -281,9 +281,14 @@ export async function POST(
                 conversation_log: pendingLog as unknown as object,
                 diagnostics: {
                   phase: "awaitingAgent",
+                  /** Раунд имитации пользователя в каталоге тестов (1 = первый POST к агенту). */
+                  runnerDialogTurn: turnIndex + 1,
+                  /** @deprecated Используйте runnerDialogTurn — то же значение; «turn» путали с шагами LLM+tools в steps. */
                   turn: turnIndex + 1,
                   maxChatTurns,
                   simulatedUserUntil: "goalOrCap",
+                  stepsMeaning:
+                    "В test_runs.steps поля «внутренний шаг N/70» — цикл LLM↔инструменты внутри одного HTTP к агенту; runnerDialogTurn — раунд имитации пользователя в раннере.",
                   agentUrl,
                   timeoutMsPerTurn: AGENT_FETCH_TIMEOUT_MS,
                   maxRunMs: TEST_RUN_MAX_MS,
@@ -333,7 +338,11 @@ export async function POST(
                 steps: lastSteps ?? undefined,
                 diagnostics: {
                   phase: "running",
+                  runnerDialogTurn: turnIndex + 1,
                   turn: turnIndex + 1,
+                  maxChatTurns,
+                  stepsMeaning:
+                    "В steps агента «внутренний шаг» — не раунд чата с пользователем; см. runnerDialogTurn в diagnostics.",
                   updatedAt: new Date().toISOString(),
                 } as unknown as object,
               },
