@@ -14,7 +14,7 @@ import { getSystemPrompt, getSystemPromptForChat } from "./llm/system-prompt.js"
 import { getConfig } from "./config.js";
 import { parseModelIdWithModality, shouldRequestImageOutput, isOpenRouterModelId } from "./lib/model-utils.js";
 import { TOOLS_FOR_LLM, TOOLS_CHAT, TOOLS_CONSULT, executeTool, RUN_COMMAND_DISALLOWED_PREFIX } from "./tools/index.js";
-import { buildReportFooter, readVersions, countWordsForFooter } from "./lib/report-footer.js";
+import { buildReportFooter, readVersions, countWordsForFooter, stripAgentReportFooter } from "./lib/report-footer.js";
 import { getServicesStatus } from "./lib/services-status.js";
 
 const MAX_TOOL_ITERATIONS = 70;
@@ -309,8 +309,9 @@ export async function runAgentCore(
   const truncateHistoryTurn = (s: string) =>
     s.length > maxTurnChars ? s.slice(0, maxTurnChars) + `\n[... обрезано, всего ${s.length} симв.]` : s;
   const historyMessages: ChatMessage[] = historyTurns.map((t) => {
-    const content = t.role === "assistant" ? stripPrefixChain(t.content) : t.content;
-    return { role: t.role, content: truncateHistoryTurn(content) };
+    const raw = t.role === "assistant" ? stripPrefixChain(t.content) : t.content;
+    const withoutFooter = t.role === "assistant" ? stripAgentReportFooter(raw) : raw;
+    return { role: t.role, content: truncateHistoryTurn(withoutFooter) };
   });
 
   const messages: ChatMessage[] =

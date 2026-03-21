@@ -292,6 +292,7 @@ async function handleRun(req: import("node:http").IncomingMessage, res: import("
         chatName: parsed.chatName,
         environment: parsed.environment,
         inputImages: parsed.inputImages,
+        disableCache: parsed.disableCache,
         footerVersions: parsed.footerVersions,
       });
       console.log("[agent] runAgent done");

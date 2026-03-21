@@ -85,3 +85,14 @@ export function countChars(s: string): number {
 }
 
 export { countWords as countWordsForFooter };
+
+/**
+ * Убирает подвал отчёта из текста ассистента перед повторной подачей в LLM (многоходовый чат).
+ * Иначе во «втором» запросе в contents попадают тысячи символов метрик/версий вместо сути ответа и уточнений.
+ */
+export function stripAgentReportFooter(text: string): string {
+  const marker = "\n\n---\nМодель:";
+  const idx = text.indexOf(marker);
+  if (idx >= 0) return text.slice(0, idx).trimEnd();
+  return text;
+}

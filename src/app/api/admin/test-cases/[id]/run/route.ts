@@ -266,6 +266,8 @@ export async function POST(
               project: "Комиссионка",
               chatName: `test-case:${testCase.number}`,
               environment: "test-runner",
+              /** Явно: даже при сбое разбора environment в serve кэш не должен подменять ответ. */
+              disableCache: true,
             };
 
             const agentUrl = `http://127.0.0.1:${AGENT_PORT}/run`;
