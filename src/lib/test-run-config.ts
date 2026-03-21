@@ -18,6 +18,14 @@ export function boundedProcessEnvMs(
 
 const DEFAULT_AGENT_FETCH_MS = 180_000;
 const DEFAULT_RUN_WALL_MS = 25 * 60 * 1000;
+/** Один HTTP-ход к агенту в каталоге тестов (много инструментов / долгий LLM). */
+const DEFAULT_TEST_RUNNER_AGENT_FETCH_MS = 600_000;
+/**
+ * Весь сеанс scope=agent с имитацией пользователя (много ходов подряд).
+ * Отдельно от общего TEST_RUN_MAX_MS, чтобы длинные диалоги не обрывались через 25 мин.
+ */
+const DEFAULT_TEST_RUNNER_SESSION_WALL_MS = 90 * 60 * 1000;
+const DEFAULT_TEST_RUNNER_MAX_CHAT_TURNS = 32;
 /** Если прогон всё ещё `running` дольше — считаем процесс мёртвым и закрываем при следующем чтении из админки. */
 const DEFAULT_STALE_AFTER_MS = 2 * 60 * 60 * 1000;
 
@@ -27,6 +35,41 @@ export function getAgentFetchTimeoutMs(): number {
 
 export function getTestRunMaxWallMs(): number {
   return boundedProcessEnvMs("TEST_RUN_MAX_MS", DEFAULT_RUN_WALL_MS, 60_000, 4 * 60 * 60 * 1000);
+}
+
+/**
+ * Таймаут одного POST к агенту из раннера тест-кейса (имитация пользователя, несколько tool_calls).
+ * По умолчанию 10 мин — иначе второй и последующие ходы часто умирали на 180 с при тяжёлом прогоне.
+ */
+export function getTestRunnerAgentFetchTimeoutMs(): number {
+  return boundedProcessEnvMs(
+    "TEST_RUN_AGENT_FETCH_TIMEOUT_MS",
+    DEFAULT_TEST_RUNNER_AGENT_FETCH_MS,
+    60_000,
+    30 * 60 * 1000,
+  );
+}
+
+/**
+ * Максимальная длительность всего прогона scope=agent (все имитированные ответы пользователя).
+ * Env: `TEST_RUN_AGENT_SESSION_MAX_MS` (не путать с `TEST_RUN_MAX_MS` для прочих проверок).
+ */
+export function getTestRunnerSessionWallMs(): number {
+  return boundedProcessEnvMs(
+    "TEST_RUN_AGENT_SESSION_MAX_MS",
+    DEFAULT_TEST_RUNNER_SESSION_WALL_MS,
+    120_000,
+    4 * 60 * 60 * 1000,
+  );
+}
+
+/** Сколько раз подряд вызывать агента с новым имитированным ответом пользователя (до успеха или провала). */
+export function getTestRunnerMaxChatTurns(): number {
+  const raw = process.env.TEST_RUN_MAX_CHAT_TURNS;
+  if (raw === undefined || raw === "") return DEFAULT_TEST_RUNNER_MAX_CHAT_TURNS;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return DEFAULT_TEST_RUNNER_MAX_CHAT_TURNS;
+  return Math.min(Math.max(Math.floor(n), 1), 64);
 }
 
 export function getTestRunStaleAfterMs(): number {

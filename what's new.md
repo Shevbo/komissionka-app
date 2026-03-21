@@ -25,6 +25,17 @@
 
 ### ______***UPDATE***________
 
+**05.03.2026 >** Багфикс: каталог тестов scope=agent — имитация ответов пользователя до результата (не только при «вопросе»)
+
+**2.1 В приложении Комиссионка (web)**  
+Раннер `POST /api/admin/test-cases/[id]/run` для `scope=agent`: **после каждого ответа агента**, если критерий успеха не выполнен, **всегда** планируется следующий имитированный ответ пользователя (эскалация по шаблонам или `parameters.userResponses`), без эвристики «есть ли вопрос в тексте». Лимиты: **`TEST_RUN_MAX_CHAT_TURNS`** (по умолчанию **32**), **`TEST_RUN_AGENT_FETCH_TIMEOUT_MS`** (по умолчанию **10 мин** на один POST к агенту), **`TEST_RUN_AGENT_SESSION_MAX_MS`** (по умолчанию **90 мин** на весь сеанс). Диагностика при исчерпании ходов: `simulationTurnsExhausted`. Файлы: [src/app/api/admin/test-cases/[id]/run/route.ts](src/app/api/admin/test-cases/[id]/run/route.ts), [src/lib/test-run-config.ts](src/lib/test-run-config.ts). Удалён недостижимый мёртвый код после `return` в том же маршруте. Документация: [docs/manual/test-catalog-architecture.md](docs/manual/test-catalog-architecture.md) §6.3, вер. 1.0.6. Всего core приложения: **14668** строк; core агента: **3974** строки (count-core-lines). app v1.18.8 → v1.18.9 (патч).
+
+**2.2 В сервисе Агент к модели ИИ**  
+Для **`environment === "test-runner"`** в `runAgentCore` всегда **`forceSystemPrompt: true`** (вместе с `forceFresh`), чтобы на каждом ходе многоходового прогона в запрос к LLM попадали правила и инструменты. Файл: [agent/contract.ts](agent/contract.ts). agent v1.7.12 → v1.7.13 (патч).
+
+**2.3–2.4**  
+Без изменений. tgbot v1.1.0.
+
 **05.03.2026 >** Экспорт прогона для ИИ: API + кнопки на интерактиве (незакоммиченное ранее)
 
 **2.1 В приложении Комиссионка (web)**  

@@ -202,7 +202,8 @@ export async function runAgent(
         project,
         inputImages: options?.inputImages,
         footerVersions: options?.footerVersions,
-        forceSystemPrompt: forceFresh,
+        /** Раннер тестов шлёт много ходов; системный промпт нужен в каждом запросе с инструментами. */
+        forceSystemPrompt: forceFresh || options?.environment === "test-runner",
         environment: options?.environment,
       }),
       timeoutMs

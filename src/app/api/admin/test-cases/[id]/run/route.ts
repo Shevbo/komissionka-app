@@ -5,10 +5,11 @@ import { prisma } from "komiss/lib/prisma";
 import { ALL_AGENT_MODELS, type AgentModelOption } from "komiss/lib/agent-models";
 import { registerTestRunController, unregisterTestRunController } from "komiss/lib/test-run-control";
 import {
-  getAgentFetchTimeoutMs,
-  getTestRunMaxWallMs,
   getTestApiInternalFetchTimeoutMs,
   fetchWithTimeoutRace,
+  getTestRunnerAgentFetchTimeoutMs,
+  getTestRunnerSessionWallMs,
+  getTestRunnerMaxChatTurns,
 } from "komiss/lib/test-run-config";
 
 const AGENT_PORT = process.env.AGENT_PORT ?? "3140";
@@ -109,10 +110,9 @@ export async function POST(
       const expectedText = typeof paramsJson.expectedText === "string" ? paramsJson.expectedText : null;
 
       // Recursive test-runner for agent-scope:
-      // - Calls agent
-      // - If agent asks clarification, simulates user replies (different answers)
-      // - Stores readable chat history in conversation_log
-      const maxChatTurns = 8;
+      // - Вызывает агента в цикле; пока критерий успеха не выполнен — подставляет имитированные ответы пользователя.
+      // - Не зависит от «есть ли знак вопроса в ответе»: следующий ход всегда планируется, пока есть лимит ходов.
+      const maxChatTurns = getTestRunnerMaxChatTurns();
       const userResponsesRaw = Array.isArray((paramsJson as Record<string, unknown> & { userResponses?: unknown }).userResponses)
         ? ((paramsJson as Record<string, unknown> & { userResponses?: unknown }).userResponses as unknown[])
         : null;
@@ -135,9 +135,9 @@ export async function POST(
       const consultModeDisabled = (txt: string): boolean =>
         /режим консультации/i.test(txt) && /операц.*невозможн/i.test(txt);
 
-      const AGENT_FETCH_TIMEOUT_MS = getAgentFetchTimeoutMs();
-      /** Жёсткий лимит на весь прогон (несколько ходов), чтобы не зависать в running часами. */
-      const TEST_RUN_MAX_MS = getTestRunMaxWallMs();
+      const AGENT_FETCH_TIMEOUT_MS = getTestRunnerAgentFetchTimeoutMs();
+      /** Жёсткий лимит на весь прогон (все имитированные ходы), без обрыва длинного сценария. */
+      const TEST_RUN_MAX_MS = getTestRunnerSessionWallMs();
       const agentRunStartedAt = Date.now();
 
       /**
@@ -168,48 +168,41 @@ export async function POST(
         }
       }
 
-      const looksLikeClarificationQuestion = (txt: string): boolean => {
-        const t = txt.trim();
-        if (!t) return false;
-        if (consultModeDisabled(t)) return false;
-        const hasQuestionMark = /\?\s*$/.test(t) || /\?\s*\n/.test(t);
-        return (
-          hasQuestionMark ||
-          /уточняющ/i.test(t) ||
-          /нужн[оа].*уточнен/i.test(t) ||
-          /нужно уточнен/i.test(t) ||
-          /уточнение:/i.test(t) ||
-          /уточнит/i.test(t) ||
-          /согласн[ыа]\s+ли/i.test(t) ||
-          /подскажите/i.test(t) ||
-          /подтвердите/i.test(t) ||
-          /как именно/i.test(t) ||
-          /какую именно/i.test(t) ||
-          /какой именно/i.test(t)
-        );
-      };
-
       const expectedTextTrimmed = expectedText?.trim() ?? "";
       const expectedIsUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(expectedTextTrimmed);
 
-      const buildUserReply = (turnIndex: number): string => {
+      /**
+       * Следующий имитированный ответ пользователя после завершённого хода `completedTurnIndex`
+       * (0 = после первого ответа агента на исходный userPrompt).
+       */
+      const buildSimulatedUserReply = (completedTurnIndex: number): string => {
         if (userResponses && userResponses.length > 0) {
-          const idx = Math.min(turnIndex, userResponses.length - 1);
+          const idx = Math.min(completedTurnIndex, userResponses.length - 1);
           const v = userResponses[idx]!;
-          return v.trim().length ? v : "Ок, продолжай без уточнений.";
+          if (v.trim().length) return v.trim();
         }
 
         if (expectedIsUuid && expectedTextTrimmed) {
-          const uuid = expectedTextTrimmed;
-          const variants = [
-            `Подтверждаю действие: удалите item.id=${uuid}. Действуйте без уточнений.`,
-            `Ок. Удалить item.id=${uuid}. Никаких дополнительных вопросов.`,
-            `Удаление подтверждено: item.id=${uuid}. Продолжайте.`,
+          const id = expectedTextTrimmed;
+          const tier = [
+            `Подтверждаю: удалите запись items.id=${id} (Prisma delete или эквивалент). Не задавайте уточняющих вопросов — выполните удаление.`,
+            `Повтор: единственная цель — физически удалить товар id=${id} из таблицы items. Запустите скрипт или run_command сейчас.`,
+            `Обязательно выполните: prisma.items.delete({ where: { id: '${id}' } }). Подтверждаю destructive DML.`,
+            `Финальное указание: id=${id} не должен остаться в БД. Завершите вызовами инструментов без вопросов к пользователю.`,
           ];
-          return variants[turnIndex % variants.length]!;
+          return tier[completedTurnIndex % tier.length]!;
         }
 
-        // Generic answer: acknowledge and let the agent proceed.
+        if (!expectedIsUuid && expectedTextTrimmed) {
+          const ex = expectedTextTrimmed;
+          const tier = [
+            `Продолжай и заверши задачу. В итоговом ответе должна появиться подстрока: ${ex}`,
+            `Без уточнений: доведи сценарий до конца так, чтобы результат содержал: ${ex}`,
+            `Срочно заверши работу; финальный текст должен включать: ${ex}`,
+          ];
+          return tier[completedTurnIndex % tier.length]!;
+        }
+
         return "Ок, продолжай по плану без дополнительных уточнений. Выполни действие так, как считаешь нужным.";
       };
 
@@ -289,6 +282,8 @@ export async function POST(
                 diagnostics: {
                   phase: "awaitingAgent",
                   turn: turnIndex + 1,
+                  maxChatTurns,
+                  simulatedUserUntil: "goalOrCap",
                   agentUrl,
                   timeoutMsPerTurn: AGENT_FETCH_TIMEOUT_MS,
                   maxRunMs: TEST_RUN_MAX_MS,
@@ -359,68 +354,44 @@ export async function POST(
               break;
             }
 
-            // Success criteria
-            const askedClarification = looksLikeClarificationQuestion(lastResultText);
+            // Критерий успеха: для UUID — запись удалена из БД; иначе — подстрока в ответе/steps/payload.
+            let goalMet = false;
             if (expectedIsUuid) {
               const item = await prisma.items.findUnique({ where: { id: expectedTextTrimmed } });
-              const ok = !item;
-              if (ok) {
-                if (askedClarification && turnIndex < maxChatTurns - 1) {
-                  // Даже если удаление в БД уже произошло, модель всё ещё просит уточнение.
-                  // По требованию сценариев теста — продолжаем диалог, чтобы имитация пользователя была полной.
-                  currentPrompt = buildUserReply(turnIndex);
-                  continue;
-                }
-
-                chatSuccess = true;
-                chatChecks.push({
-                  name: "dbItemDeletedById",
-                  ok,
-                  details: undefined,
-                });
-                break;
-              }
+              goalMet = !item;
             } else {
               const stepsText = safeStringify(lastSteps);
               const agentPayloadText = safeStringify(data);
-              const ok =
+              goalMet =
                 lastResultText.includes(expectedTextTrimmed) ||
                 stepsText.includes(expectedTextTrimmed) ||
                 agentPayloadText.includes(expectedTextTrimmed);
-              if (ok) {
-                if (askedClarification && turnIndex < maxChatTurns - 1) {
-                  currentPrompt = buildUserReply(turnIndex);
-                  continue;
-                }
-
-                chatSuccess = true;
-                chatChecks.push({
-                  name: "containsExpectedText",
-                  ok,
-                  details: undefined,
-                });
-                break;
-              }
             }
 
-            // If agent asks a clarification question - simulate user reply and continue.
-            if (turnIndex < maxChatTurns - 1) {
-              if (looksLikeClarificationQuestion(lastResultText)) {
-                // Agent explicitly needs user input.
-                currentPrompt = buildUserReply(turnIndex);
-              } else if (expectedIsUuid && expectedTextTrimmed) {
-                // No explicit question, but expected result isn't reached yet.
-                currentPrompt = `Ок. Действуй строго по id товара=${expectedTextTrimmed}. Не задавай уточнений. Выполни удаление и заверши.`;
-              } else if (!expectedIsUuid && expectedTextTrimmed) {
-                currentPrompt = `Ок. Продолжай выполнение и дай финальный результат, чтобы он содержал ожидаемую строку: ${expectedTextTrimmed}. Без уточняющих вопросов.`;
-              } else {
-                currentPrompt = buildUserReply(turnIndex);
-              }
-              continue;
+            if (goalMet) {
+              chatSuccess = true;
+              chatChecks.push({
+                name: expectedIsUuid ? "dbItemDeletedById" : "containsExpectedText",
+                ok: true,
+                details: undefined,
+              });
+              break;
             }
 
-            // Max turns reached -> stop.
-            break;
+            // Цель не достигнута — всегда планируем следующий имитированный ответ пользователя (если лимит ходов не исчерпан).
+            if (turnIndex >= maxChatTurns - 1) {
+              localDiagnostics = {
+                ...(localDiagnostics && typeof localDiagnostics === "object" ? localDiagnostics : {}),
+                simulationTurnsExhausted: true,
+                maxChatTurns,
+                lastCompletedTurn: turnIndex + 1,
+                hint: "Увеличьте TEST_RUN_MAX_CHAT_TURNS или проверьте, что агент реально выполняет сценарий.",
+              };
+              break;
+            }
+
+            currentPrompt = buildSimulatedUserReply(turnIndex);
+            continue;
           }
 
           if (!chatSuccess) {
@@ -536,158 +507,6 @@ export async function POST(
           comparisonResult: finished.comparison_result,
         },
       });
-
-      const body = {
-        prompt: userPrompt,
-        history: [],
-        mode,
-        ...(model ? { model } : {}),
-        project: "Комиссионка",
-        chatName: `test-case:${testCase!.number}`,
-        environment: "test-runner",
-      };
-
-      const res = await fetch(`http://127.0.0.1:${AGENT_PORT}/run`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(AGENT_API_KEY ? { Authorization: `Bearer ${AGENT_API_KEY}` } : {}),
-        },
-        body: JSON.stringify(body),
-      });
-
-      let data = (await res.json()) as {
-        result?: string;
-        error?: string;
-        steps?: unknown;
-        logId?: string | null;
-      };
-
-      steps = data.steps ?? null;
-      agentLogId = data.logId ?? null;
-
-      const resultText: string =
-        typeof data.result === "string"
-          ? (data.result as string)
-          : typeof data.error === "string"
-            ? (data.error as string)
-            : "";
-      const stepsText = safeStringify(steps);
-      const agentPayloadText = safeStringify(data);
-      const checks: Array<{ name: string; ok: boolean; details?: string }> = [];
-      let success = false;
-      if (!expectedText?.trim()) {
-        success = false;
-        checks.push({
-          name: "expectedTextMissing",
-          ok: false,
-          details: "parameters.expectedText отсутствует или пустой JSON. Заполните параметры через «Обогатить спецификацию с ИИ».",
-        });
-        diagnostics = {
-          expectedTextMissing: true,
-          hint: "См. test_cases.parameters для тест‑кейса: expectedText должен быть строкой.",
-        };
-      } else {
-        const trimmedExpected = expectedText!.trim();
-        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmedExpected);
-
-        if (isUuid) {
-          const consultModeDisabled =
-            /режим консультации/i.test(resultText) && /операц.*невозможн/i.test(resultText);
-
-          // Если агент вернул сообщение о недоступности инструментов из-за consult-mode,
-          // то тест нельзя считать "успешным" даже если fallback-логика смогла бы удалить запись в БД:
-          // это противоречит ожиданию, что выполнение происходило в запрошенном режиме.
-          if (consultModeDisabled) {
-            success = false;
-            checks.push({
-              name: "agentConsultModeDisabled",
-              ok: false,
-              details: "Агент вернул ошибку о недоступности инструментов в режиме консультации; параметры выполнения не соблюдены.",
-            });
-            diagnostics = {
-              agentConsultModeDisabled: true,
-              agentResultSnippet: resultText.slice(0, 2000),
-            };
-          } else {
-          // Если expectedText похож на UUID товара, иногда агент сначала уточняет намерение и
-          // не выполняет удаление. Чтобы тесты были устойчивыми, делаем один ретрай с явным id.
-          const itemBefore = await prisma.items.findUnique({ where: { id: trimmedExpected } });
-          if (itemBefore) {
-            // В mode=dev агент может сначала запросить уточнение и не выполнить tool_calls
-            // до "ответа пользователя". Делаем ретрай в том же режиме, но с явным id и запретом уточнений.
-            const retryPrompt = `${userPrompt}\n\nСделайте действие строго по id товара: удалите item.id=${trimmedExpected}.\nНе задавайте уточняющих вопросов. Если операция невозможна — верните error.`;
-            const retryBody = {
-              ...body,
-              prompt: retryPrompt,
-              mode,
-              history: [],
-            };
-
-            const retryRes = await fetch(`http://127.0.0.1:${AGENT_PORT}/run`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                ...(AGENT_API_KEY ? { Authorization: `Bearer ${AGENT_API_KEY}` } : {}),
-              },
-              body: JSON.stringify(retryBody),
-            });
-
-            data = (await retryRes.json()) as typeof data;
-            steps = data.steps ?? null;
-            agentLogId = data.logId ?? null;
-          }
-
-          // Если expectedText — это UUID, то для текущего test-catalog это означает "id товара".
-          // Засчитываем успех только если сущность `items` реально удалена (не найдена в БД).
-          // Чтобы тесты не зависели от того, сумел ли агент выполнить tool_calls в данном режиме,
-          // делаем fallback-удаление через Prisma, если после ретрая запись всё ещё существует.
-          let itemAfter = await prisma.items.findUnique({ where: { id: trimmedExpected } });
-
-          if (itemAfter) {
-            try {
-              await prisma.items.delete({ where: { id: trimmedExpected } });
-              itemAfter = await prisma.items.findUnique({ where: { id: trimmedExpected } });
-            } catch {
-              // Fallback мог не сработать из-за внешних ограничений/связей.
-              // Тогда success останется false.
-            }
-          }
-
-          const ok = !itemAfter;
-          success = ok;
-          checks.push({
-            name: "dbItemDeletedById",
-            ok,
-            details: ok ? undefined : "Запись в items по ожидаемому id всё ещё существует (после fallback).",
-          });
-          }
-        } else {
-          const ok =
-            resultText.includes(trimmedExpected) ||
-            stepsText.includes(trimmedExpected) ||
-            agentPayloadText.includes(trimmedExpected);
-          success = ok;
-          checks.push({
-            name: "containsExpectedText",
-            ok,
-            details: ok ? undefined : "Ожидаемый текст не найден: ни в result, ни в steps/payload агента.",
-          });
-        }
-      }
-
-      comparisonResult = {
-        success,
-        checks,
-        agentError: typeof data.error === "string" ? data.error : undefined,
-      };
-      const agentError = data.error;
-      if (typeof agentError === "string" && agentError!.trim()) {
-        status = "failed";
-        diagnostics = { agentError };
-      } else {
-        status = success ? "success" : "failed";
-      }
     } else if (testCase.scope === "api") {
       const method = String(paramsJson.method ?? "GET").toUpperCase();
       const url = String(paramsJson.url ?? "");
