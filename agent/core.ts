@@ -458,7 +458,10 @@ export async function runAgentCore(
           });
         const responseHasClarification =
           responseText.includes("?") || /\b(уточн|какие|подтверд)\b/i.test(responseText);
-        if (!hasAnyClarifyingQuestionInHistory) {
+        // Уже был ответ ассистента в истории запроса (предыдущий HTTP-ход) — пользователь/раннер теста ответили.
+        // Иначе guard снова блокирует tools, если формулировка уточнения не попала в эвристику выше (баг прогонов №26–27).
+        const priorAssistantInHistory = historyTurns.some((t) => t.role === "assistant");
+        if (!priorAssistantInHistory && !hasAnyClarifyingQuestionInHistory) {
           // Если в первом же ответе модель уже задала уточняющие вопросы, НЕ выполняем tool_calls:
           // возвращаем текст вопросов/плана и ждём ответа пользователя. Это устраняет ваш кейс,
           // где модель спрашивает про «первую карточку», но одновременно вызывает read_file,
