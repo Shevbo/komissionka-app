@@ -56,6 +56,20 @@ interface ParsedRequest {
   disableCache?: boolean;
   /** Версии app/agent/tgbot из приложения — для подвала. */
   footerVersions?: { app: string; agent: string; tgbot: string };
+  /** Переопределение таймаута runAgent (мс). Раннер каталога тестов передаёт тот же бюджет, что и HTTP-клиент. */
+  timeoutMs?: number;
+}
+
+/** 30 с … 45 мин — согласовано с getTestRunnerAgentFetchTimeoutMs на стороне приложения. */
+function parseTimeoutMsFromBody(data: unknown): number | undefined {
+  if (!data || typeof data !== "object" || !("timeoutMs" in data)) return undefined;
+  const v = (data as { timeoutMs?: unknown }).timeoutMs;
+  const n = typeof v === "number" ? v : Number(v);
+  if (!Number.isFinite(n) || n <= 0) return undefined;
+  const ms = Math.floor(n);
+  const MIN = 30_000;
+  const MAX = 45 * 60 * 1000;
+  return Math.min(Math.max(ms, MIN), MAX);
 }
 
 function parseRequest(body: string): ParsedRequest | null {
@@ -131,6 +145,7 @@ function parseRequest(body: string): ParsedRequest | null {
           footerVersions = { app: fv.app, agent: fv.agent, tgbot: fv.tgbot };
         }
       }
+      const timeoutMs = parseTimeoutMsFromBody(data);
       return {
         prompt,
         history,
@@ -144,6 +159,7 @@ function parseRequest(body: string): ParsedRequest | null {
         inputImages,
         disableCache,
         footerVersions,
+        ...(timeoutMs !== undefined ? { timeoutMs } : {}),
       };
     }
   } catch {
@@ -260,6 +276,7 @@ async function handleRun(req: import("node:http").IncomingMessage, res: import("
           inputImages: parsed.inputImages,
           disableCache: parsed.disableCache,
           footerVersions: parsed.footerVersions,
+          ...(parsed.timeoutMs !== undefined ? { timeoutMs: parsed.timeoutMs } : {}),
         });
         send("done", { result, logId: logId ?? null });
         console.log("[agent] runAgent done");
@@ -294,6 +311,7 @@ async function handleRun(req: import("node:http").IncomingMessage, res: import("
         inputImages: parsed.inputImages,
         disableCache: parsed.disableCache,
         footerVersions: parsed.footerVersions,
+        ...(parsed.timeoutMs !== undefined ? { timeoutMs: parsed.timeoutMs } : {}),
       });
       console.log("[agent] runAgent done");
       safeEnd(res, 200, JSON.stringify({ result, steps: steps ?? [], logId: logId ?? null }));

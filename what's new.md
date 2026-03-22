@@ -25,6 +25,17 @@
 
 ### ______***UPDATE***________
 
+**22.03.2026 >** Прогон каталога: таймаут хода = таймаут агента; дефолт 20 мин (не «висит 10 мин» из-за рассинхрона)
+
+**2.1 В приложении Комиссионка (web)**  
+Раннер `POST /api/admin/test-cases/[id]/run` передаёт в агент **`timeoutMs`** (тот же бюджет, что и `fetch`). Дефолт **`TEST_RUN_AGENT_FETCH_TIMEOUT_MS`**: **1200000** мс (20 мин, макс. 45 мин в env). Файлы: [src/app/api/admin/test-cases/[id]/run/route.ts](src/app/api/admin/test-cases/[id]/run/route.ts), [src/lib/test-run-config.ts](src/lib/test-run-config.ts). Документация: [docs/manual/test-catalog-architecture.md](docs/manual/test-catalog-architecture.md) §6.3, вер. 1.0.11. Core приложения (count-core-lines): **14773** строки. app v1.19.0 → v1.19.1 (патч).
+
+**2.2 В сервисе Агент к модели ИИ**  
+**`POST /run`**: опциональное тело **`timeoutMs`** (30 с … 45 мин) передаётся в **`runAgent`**, чтобы внутренний `withTimeout` совпадал с клиентом раннера. Файл: [agent/serve.ts](agent/serve.ts). Core агента: **4008** строк. agent v1.7.15 → v1.7.16 (патч).
+
+**2.3–2.4**  
+Без изменений. tgbot v1.1.0.
+
 **22.03.2026 >** Каталог тестов: промпт для `test-runner` — без «подтвердите удаление» на первом ходе
 
 **2.1 В приложении Комиссионка (web)**  

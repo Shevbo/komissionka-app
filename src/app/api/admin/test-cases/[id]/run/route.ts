@@ -284,6 +284,8 @@ export async function POST(
               project: "Комиссионка",
               chatName: `test-case:${testCase.number}`,
               environment: "test-runner",
+              /** Совпадает с fetchJsonWithTimeout и с AGENT_TIMEOUT_MS внутри агента (serve передаёт в runAgent). */
+              timeoutMs: AGENT_FETCH_TIMEOUT_MS,
               /** Явно: даже при сбое разбора environment в serve кэш не должен подменять ответ. */
               disableCache: true,
             };

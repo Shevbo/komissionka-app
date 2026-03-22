@@ -18,8 +18,8 @@ export function boundedProcessEnvMs(
 
 const DEFAULT_AGENT_FETCH_MS = 180_000;
 const DEFAULT_RUN_WALL_MS = 25 * 60 * 1000;
-/** Один HTTP-ход к агенту в каталоге тестов (много инструментов / долгий LLM). */
-const DEFAULT_TEST_RUNNER_AGENT_FETCH_MS = 600_000;
+/** Один HTTP-ход к агенту в каталоге тестов (много инструментов / долгий LLM; до 70 внутренних шагов). */
+const DEFAULT_TEST_RUNNER_AGENT_FETCH_MS = 1_200_000;
 /**
  * Весь сеанс scope=agent с имитацией пользователя (много ходов подряд).
  * Отдельно от общего TEST_RUN_MAX_MS, чтобы длинные диалоги не обрывались через 25 мин.
@@ -39,14 +39,15 @@ export function getTestRunMaxWallMs(): number {
 
 /**
  * Таймаут одного POST к агенту из раннера тест-кейса (имитация пользователя, несколько tool_calls).
- * По умолчанию 10 мин — иначе второй и последующие ходы часто умирали на 180 с при тяжёлом прогоне.
+ * Дефолт 20 мин: ход с множеством LLM+tools иначе упирается в лимит раньше, чем агент успевает завершить цикл.
+ * То же значение передаётся в теле POST /run как `timeoutMs`, чтобы `withTimeout` в агенте совпадал с fetch раннера.
  */
 export function getTestRunnerAgentFetchTimeoutMs(): number {
   return boundedProcessEnvMs(
     "TEST_RUN_AGENT_FETCH_TIMEOUT_MS",
     DEFAULT_TEST_RUNNER_AGENT_FETCH_MS,
     60_000,
-    30 * 60 * 1000,
+    45 * 60 * 1000,
   );
 }
 
