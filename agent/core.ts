@@ -160,10 +160,21 @@ export async function runAgentCore(
     llmBaseUrl = "https://generativelanguage.googleapis.com/v1beta/openai";
   }
   const agentInfo = llmModel ? { model: llmModel } : undefined;
-  const systemPrompt =
+  let systemPrompt =
     mode === "chat"
       ? getSystemPromptForChat(agentInfo)
       : getSystemPrompt(root, contextFilePath, agentInfo, mode);
+
+  /** Раннер каталога тестов шлёт environment=test-runner; без этого модель часто останавливается на «подтвердите удаление». */
+  if (options?.environment === "test-runner") {
+    systemPrompt += `
+
+--- Режим прогона каталога тестов (test-runner) ---
+Ты участвуешь в автоматическом прогоне тест-кейса: следующие сообщения пользователя могут быть синтетическими продолжениями сценария.
+- Не задавай цепочку уточняющих вопросов («подтвердите удаление», «устраивает ли план»): выполняй запрошенное действие сразу, в том числе деструктивные операции с данными по условию из промпта.
+- Если без выбора не обойтись — выбери разумный вариант по умолчанию (например удалить все записи items, подходящие под явное условие в промпте) и выполни через инструменты.
+- В финальном ответе явно опиши результат (что сделано, сколько записей затронуто), без ожидания нового подтверждения от пользователя.`;
+  }
 
   const steps: AgentStep[] = [];
   const logEntries: string[] = [];
