@@ -25,6 +25,14 @@
 
 ### ______***UPDATE***________
 
+**22.03.2026 >** Прогон каталога: GET /health перед POST к агенту; явные ошибки HTTP/не-JSON от агента
+
+**2.1 В приложении Комиссионка (web)**  
+Перед циклом вызовов агента для `scope=agent`: **`GET`** `http://127.0.0.1:${AGENT_PORT}/health` (8 с) — при неверном `AGENT_PORT` в `.env` приложения (не совпадает с pm2 `agent`, часто **3140** vs ошибочно **3141**) прогон падает с **`diagnostics.agentHealthCheckFailed`**, а не «нет ответа модели» до таймаута. **`fetch`** к `/run`: проверка `res.ok` и разбор JSON, иначе понятная ошибка. Файл: [src/app/api/admin/test-cases/[id]/run/route.ts](src/app/api/admin/test-cases/[id]/run/route.ts). Документация: [docs/manual/test-catalog-architecture.md](docs/manual/test-catalog-architecture.md) §6.3, вер. 1.0.12. Core приложения (count-core-lines): **14843** строки. app v1.19.1 → v1.19.2 (патч).
+
+**2.2–2.4**  
+Без изменений. agent v1.7.16, tgbot v1.1.0.
+
 **22.03.2026 >** Прогон каталога: таймаут хода = таймаут агента; дефолт 20 мин (не «висит 10 мин» из-за рассинхрона)
 
 **2.1 В приложении Комиссионка (web)**  

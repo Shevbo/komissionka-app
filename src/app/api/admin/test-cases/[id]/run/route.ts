@@ -144,6 +144,7 @@ export async function POST(
 
       /**
        * Таймаут через Promise.race: даже если Node fetch игнорирует AbortSignal, await завершится по таймеру.
+       * Проверяем HTTP-статус и JSON — иначе «тишина» или HTML-ошибка маскируются как пустой ответ.
        */
       async function fetchJsonWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<any> {
         const controller = new AbortController();
@@ -161,12 +162,61 @@ export async function POST(
         try {
           const fetchPromise = (async () => {
             const res = await fetch(url, { ...init, signal: controller.signal });
-            return await res.json();
+            const text = await res.text();
+            if (!res.ok) {
+              const e = new Error(
+                `Агент HTTP ${res.status}: ${text.slice(0, 500)}`,
+              );
+              e.name = "AgentHttpError";
+              throw e;
+            }
+            try {
+              return text.length ? JSON.parse(text) : {};
+            } catch {
+              const e = new Error(`Агент вернул не-JSON (первые 300 симв.): ${text.slice(0, 300)}`);
+              e.name = "AgentHttpError";
+              throw e;
+            }
           })();
           return await Promise.race([fetchPromise, timeoutPromise]);
         } finally {
           if (timeoutId !== undefined) clearTimeout(timeoutId);
           runController.signal.removeEventListener("abort", onRunAbort);
+        }
+      }
+
+      /** Быстрая проверка до долгого POST: неверный AGENT_PORT в .env Next.js даёт ECONNREFUSED за секунды, а не «тишину» 20 мин. */
+      async function quickAgentHealth(): Promise<{ ok: boolean; error?: string }> {
+        const healthUrl = `http://127.0.0.1:${AGENT_PORT}/health`;
+        try {
+          const ac = new AbortController();
+          const t = setTimeout(() => ac.abort(), 8000);
+          let res: Response;
+          try {
+            res = await fetch(healthUrl, { signal: ac.signal });
+          } finally {
+            clearTimeout(t);
+          }
+          const text = await res.text();
+          if (!res.ok) {
+            return { ok: false, error: `HTTP ${res.status} ${text.slice(0, 200)}` };
+          }
+          let j: { status?: string } | null = null;
+          try {
+            j = text ? (JSON.parse(text) as { status?: string }) : null;
+          } catch {
+            return { ok: false, error: `Не-JSON от /health: ${text.slice(0, 200)}` };
+          }
+          if (j?.status === "ok") return { ok: true };
+          return { ok: false, error: "Ответ /health без status:ok" };
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          return {
+            ok: false,
+            error: msg.includes("fetch failed") || /ECONNREFUSED/i.test(msg)
+              ? `Нет соединения с агентом на порту ${AGENT_PORT} (${msg}). Проверьте AGENT_PORT в .env приложения = порт pm2 process «agent» (часто 3140, не путать с test1 на 3141).`
+              : msg,
+          };
         }
       }
 
@@ -245,6 +295,23 @@ export async function POST(
           }
 
           if (!skipAgentLoop) {
+            const preflight = await quickAgentHealth();
+            if (!preflight.ok) {
+              chatSuccess = false;
+              chatChecks.push({
+                name: "agentHealthCheckFailed",
+                ok: false,
+                details: preflight.error ?? "Агент недоступен (GET /health)",
+              });
+              localDiagnostics = {
+                agentHealthCheckFailed: true,
+                agentPort: AGENT_PORT,
+                healthUrl: `http://127.0.0.1:${AGENT_PORT}/health`,
+                error: preflight.error,
+                hint:
+                  "На сервере: pm2 list; curl -s http://127.0.0.1:AGENT_PORT/health. В .env приложения (komissionka) переменная AGENT_PORT должна совпадать с портом процесса pm2 «agent» (обычно 3140). Значение 3141 часто относится к test1 — не путать с prod.",
+              };
+            } else {
           for (let turnIndex = 0; turnIndex < maxChatTurns; turnIndex++) {
             if (Date.now() - agentRunStartedAt > TEST_RUN_MAX_MS) {
               chatSuccess = false;
@@ -429,9 +496,11 @@ export async function POST(
             currentPrompt = buildSimulatedUserReply(turnIndex);
             continue;
           }
+            }
           }
 
           if (!chatSuccess) {
+            if (!chatChecks.some((c) => c.name === "agentHealthCheckFailed")) {
             if (expectedIsUuid) {
               if (!chatChecks.some((c) => c.name === "expectedItemNotPresentAtRunStart")) {
                 const item = await prisma.items.findUnique({ where: { id: expectedTextTrimmed } });
@@ -456,6 +525,7 @@ export async function POST(
                 expectedText: expectedTextTrimmed,
                 lastAgentResultSnippet: lastResultText.slice(0, 2000),
               };
+            }
             }
           }
         }
