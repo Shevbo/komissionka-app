@@ -119,7 +119,7 @@ npm run prisma:studio
 npx prisma studio --browser none
 ```
 
-В выводе будет порт (например `http://localhost:51212`). Для доступа с локального компьютера создайте SSH-туннель: `ssh -L 5555:localhost:51212 hoster`, затем откройте http://localhost:5555 в браузере.
+В выводе будет порт (например `http://localhost:51212`). Для доступа из внешнего браузера создайте SSH-туннель: `ssh -L 5555:localhost:51212 hoster`, затем откройте http://localhost:5555.
 
 **Где открыть в браузере**
 

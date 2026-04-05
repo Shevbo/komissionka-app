@@ -746,7 +746,16 @@ export default function AdminPage() {
         const formData = new FormData();
         formData.append("file", heroImageFile);
         const uploadRes = await fetch("/api/upload/hero", { method: "POST", body: formData });
-        if (!uploadRes.ok) throw new Error("Ошибка загрузки изображения");
+        if (!uploadRes.ok) {
+          let msg = "Ошибка загрузки изображения";
+          try {
+            const j = (await uploadRes.json()) as { error?: string };
+            if (j?.error) msg = j.error;
+          } catch {
+            /* ignore */
+          }
+          throw new Error(msg);
+        }
         const uploadData = await uploadRes.json();
         hero_image_url = uploadData.url ?? hero_image_url;
         setHeroImageFile(null);
@@ -1124,11 +1133,6 @@ export default function AdminPage() {
               Обновить
             </Button>
             <Button variant="outline" size="sm" asChild>
-              <Link href="/admin/prisma-studio" target="_blank" rel="noopener noreferrer">
-                Prisma Studio
-              </Link>
-            </Button>
-            <Button variant="outline" size="sm" asChild>
               <Link href="/admin/terminal" target="_blank" rel="noopener noreferrer">
                 Терминал
               </Link>
@@ -1170,15 +1174,6 @@ export default function AdminPage() {
                 >
                   Обновить
                 </button>
-                <Link
-                  href="/admin/prisma-studio"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block w-full px-3 py-2 text-left text-sm hover:bg-zinc-50"
-                  onClick={() => setAdminTopMenuOpen(false)}
-                >
-                  Prisma Studio
-                </Link>
                 <Link
                   href="/admin/terminal"
                   target="_blank"

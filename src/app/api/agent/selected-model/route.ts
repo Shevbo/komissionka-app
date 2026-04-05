@@ -8,7 +8,7 @@ import { isOpenRouterModel, resolveLegacyModelId } from "komiss/lib/agent-models
 
 function checkAuth(req: Request): boolean {
   const apiKey = process.env.AGENT_API_KEY?.trim();
-  if (!apiKey) return true; // без ключа — только для локальной разработки
+  if (!apiKey) return true; // без ключа — только для отладочного контура
 
   const auth = req.headers.get("authorization");
   if (auth?.startsWith("Bearer ")) return auth.slice(7) === apiKey;

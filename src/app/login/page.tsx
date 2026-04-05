@@ -33,7 +33,9 @@ export default function LoginPage() {
         return;
       }
       if (!result?.ok) {
-        setError("Вход не выполнен. Проверьте NEXTAUTH_URL и NEXTAUTH_SECRET на сервере.");
+        setError(
+          "Вход не выполнен. На проде: NEXTAUTH_URL=https://komissionka92.ru, AUTH_TRUST_HOST=true за nginx, совпадение секрета NextAuth."
+        );
         return;
       }
 
@@ -49,7 +51,13 @@ export default function LoginPage() {
         <CardHeader>
           <h1 className="text-xl font-semibold">Вход</h1>
           <p className="text-sm text-muted-foreground">
-            Войдите в аккаунт для публикации товаров
+            Войдите по email и паролю. На проде при настроенном мосте Shectory используйте те же учётные данные,
+            что на{" "}
+            <a href="https://shectory.ru/login" className="underline hover:text-foreground" target="_blank" rel="noreferrer">
+              shectory.ru
+            </a>{" "}
+            (переменные <code className="text-xs">SHECTORY_AUTH_BRIDGE_SECRET</code> /{" "}
+            <code className="text-xs">SHECTORY_PORTAL_URL</code> на сервере).
           </p>
         </CardHeader>
         <CardContent>

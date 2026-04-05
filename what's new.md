@@ -25,6 +25,89 @@
 
 ### ______***UPDATE***________
 
+**05.04.2026 >** Hero в админке: большие файлы (8+ МБ), оригинал на диске, отдача по ширине экрана
+
+**2.1 В приложении Комиссионка (web)**  
+Загрузка hero: поток в файл без `arrayBuffer` на весь объём; лимит тела **40 МБ** (`next.config` + проверка в API). Сохраняется **оригинал** `…__orig.<ext>`, генерируются WebP **768 / 1280 / 1920** px; в настройках хранится URL варианта **1280**. Главная: `<img>` с `srcset`/`sizes` (viewport, DPR, подсказки браузеру для нагрузки на сеть), старые URL без суффикса `__w*.webp` по-прежнему через `background-image`. Nginx: `client_max_body_size 40m` в [scripts/nginx-komissionka92.https.conf](scripts/nginx-komissionka92.https.conf) и [scripts/nginx-komissionka92.conf](scripts/nginx-komissionka92.conf). Файлы: [src/app/api/upload/hero/route.ts](src/app/api/upload/hero/route.ts), [src/lib/hero-image.ts](src/lib/hero-image.ts), [src/app/page.tsx](src/app/page.tsx), [next.config.ts](next.config.ts). app v1.19.5 → v1.19.6 (патч).
+
+**2.2 В сервисе Агент к модели ИИ**  
+Без изменений. v1.7.16
+
+**2.3 В сервисе Телеграм-Бот**  
+Без изменений. v1.1.1
+
+**2.4 PWA**  
+Без изменений.
+
+---
+
+**05.04.2026 >** Вход: при мосте портала только каталог Shectory (без локального пароля)
+
+**2.1 В приложении Комиссионка (web)**  
+При `SHECTORY_AUTH_BRIDGE_SECRET` пароль проверяется **только** у портала; совпадение email в локальной БД не даёт fallback на bcrypt. После успешного входа у существующей записи `users.encrypted_password` обнуляется (источник истины — портал). Без секрета поведение прежнее (только локальный bcrypt). Файл: [src/lib/auth.ts](src/lib/auth.ts); [docs/manual/app-komissionka.md](docs/manual/app-komissionka.md). app v1.19.4 → v1.19.5 (патч).
+
+**2.2 В сервисе Агент к модели ИИ**  
+Без изменений. v1.7.16
+
+**2.3 В сервисе Телеграм-Бот**  
+Без изменений. v1.1.1
+
+**2.4 PWA**  
+Без изменений.
+
+---
+
+**05.04.2026 >** HTTPS/вход: AUTH_TRUST_HOST, шаблон nginx SSL, исправление скриптов домена
+
+**2.1 В приложении Комиссионка (web)**  
+Скрипты домена выставляли `NEXTAUTH_URL=http://…` на проде — ломались cookie и NextAuth за HTTPS. Исправлено: `https://komissionka92.ru`, в `.env` пишется **`AUTH_TRUST_HOST=true`** (читает next-auth, в отличие от `NEXTAUTH_TRUST_HOST`). Добавлен [scripts/nginx-komissionka92.https.conf](scripts/nginx-komissionka92.https.conf): редирект www→apex, инструкция certbot с **-d** на оба имени (устранение «недопустимое имя сертификата» в Kaspersky). Обновлены [scripts/setup-domain-komissionka92.ps1](scripts/setup-domain-komissionka92.ps1), [scripts/run-all-server-steps.ps1](scripts/run-all-server-steps.ps1), [`.env.example`](.env.example), [docs/manual/app-komissionka.md](docs/manual/app-komissionka.md) §6, [TECH-NOTES.md](TECH-NOTES.md), [next.config.ts](next.config.ts) (www в remotePatterns), подсказка на [login/page.tsx](src/app/login/page.tsx). app v1.19.3 → v1.19.4 (патч).
+
+**2.2 В сервисе Агент к модели ИИ**  
+Без изменений. v1.7.16
+
+**2.3 В сервисе Телеграм-Бот**  
+Без изменений. v1.1.1
+
+**2.4 PWA**  
+Без изменений.
+
+---
+
+**05.04.2026 >** Вход через каталог Shectory Portal; Prisma Studio — с портала проектов
+
+**2.1 В приложении Комиссионка (web)**  
+Добавлен мост `SHECTORY_AUTH_BRIDGE_SECRET` / `SHECTORY_PORTAL_URL`: проверка пароля через `POST /api/internal/verify-portal-credentials`, синхронизация `profiles.role` (superadmin|admin → admin). Локальный bcrypt остаётся запасным вариантом. Новые файлы: [src/lib/shectory-portal-auth.ts](src/lib/shectory-portal-auth.ts), [src/lib/map-portal-role.ts](src/lib/map-portal-role.ts); правки [src/lib/auth.ts](src/lib/auth.ts), [src/app/login/page.tsx](src/app/login/page.tsx), [`.env.example`](.env.example). Кнопки Prisma Studio убраны из шапки [src/app/admin/page.tsx](src/app/admin/page.tsx) — вход на Studio с карточки проекта на shectory.ru. Обновлён [docs/manual/app-komissionka.md](docs/manual/app-komissionka.md) (раздел Prisma Studio). app v1.19.2 → v1.19.3 (патч).
+
+**2.2 В сервисе Агент к модели ИИ**  
+Без изменений. v1.7.16
+
+**2.3 В сервисе Телеграм-Бот**  
+Без изменений. v1.1.1
+
+**2.4 PWA**  
+Без изменений.
+
+---
+
+**26.03.2026 >** Баг: ТГ-бот зацикливался на 409 Conflict и не откликался (KOMIS-1)
+
+**2.1 В приложении Комиссионка (web)**  
+Без изменений. v1.19.2
+
+**2.2 В сервисе Агент к модели ИИ**  
+Без изменений. v1.7.16
+
+**2.3 В сервисе Телеграм-Бот**  
+Баг-фикс: бот циклически падал на 409 Conflict (токен занят другим инстансом) → pm2 мгновенно рестартовал → 429 Too Many Requests / ETIMEDOUT. Исправлено:  
+- `telegram-bot/bot.ts`: перед стартом polling вызывается `deleteWebhook()` для очистки занятого соединения; на 409 сначала останавливает polling и ждёт 10 с перед exit (даёт время освободить токен). Добавлены информативные логи старта.  
+- `ecosystem.config.cjs`: добавлен `exp_backoff_restart_delay: 1000` и `max_restarts: 30` для bot-процесса, чтобы pm2 не рестартовал мгновенно при краше; `--no-deprecation` перенесён в env NODE_OPTIONS.  
+Заменено ~15 строк из ~860 строк core бота. v1.1.0 → v1.1.1
+
+**2.4 PWA**  
+Без изменений.
+
+---
+
 **22.03.2026 >** Прогон каталога: GET /health перед POST к агенту; явные ошибки HTTP/не-JSON от агента
 
 **2.1 В приложении Комиссионка (web)**  

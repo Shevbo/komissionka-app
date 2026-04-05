@@ -71,7 +71,7 @@ function checkAgentHealth(port: string): Promise<{ ok: boolean; error?: string }
   });
 }
 
-/** Запрос к агенту через Node http (обходит проблемы fetch/undici на Windows). */
+/** Запрос к агенту через Node http (обходит редкие проблемы fetch/undici в некоторых окружениях). */
 function agentRequest(
   port: string,
   path: string,
@@ -185,7 +185,7 @@ export async function POST(req: Request) {
   const useStream = stream && !isCodePrompt;
 
   // Выбранная модель:
-  // 1) приоритет — model из тела запроса (локальный override);
+  // 1) приоритет — model из тела запроса (override на один запрос);
   // 2) иначе — модель из site_settings.agent_llm_model;
   // 3) если обе пусты — агент возьмёт свою модель по умолчанию из конфига.
   let modelOverride: { model: string; baseUrl?: string; apiKey?: string } | undefined;

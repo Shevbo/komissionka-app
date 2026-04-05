@@ -27,19 +27,38 @@ const APP_BASE_URL = (() => {
   return "http://127.0.0.1:3000";
 })();
 
-const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
+const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: false });
+
+let consecutiveErrors = 0;
 
 bot.on("polling_error", (err: Error & { code?: string }) => {
   if (err.code === "ETELEGRAM" && String(err.message).includes("409")) {
     // eslint-disable-next-line no-console
     console.error(
-      "[bot] 409 Conflict: токен занят. Варианты: 1) Остановить бота на хостинге (Vercel/Railway/др.) 2) Создать новый токен в @BotFather"
+      "[bot] 409 Conflict: токен занят другим процессом. Завершение через 10 с (pm2 перезапустит с backoff)…"
     );
-    process.exit(1);
+    bot.stopPolling().catch(() => {});
+    setTimeout(() => process.exit(1), 10_000);
+    return;
   }
+  consecutiveErrors++;
   // eslint-disable-next-line no-console
-  console.error("[bot] polling_error:", err.message);
+  console.error(`[bot] polling_error (${consecutiveErrors}):`, err.message);
 });
+
+(async () => {
+  try {
+    await bot.deleteWebhook({ drop_pending_updates: false });
+    // eslint-disable-next-line no-console
+    console.log("[bot] Webhook cleared, starting polling…");
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error("[bot] deleteWebhook failed:", e instanceof Error ? e.message : e);
+  }
+  bot.startPolling();
+  // eslint-disable-next-line no-console
+  console.log("[bot] Bot polling started");
+})();
 
 function chunkMessage(text: string, limit = 4096): string[] {
   const chunks: string[] = [];

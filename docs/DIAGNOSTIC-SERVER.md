@@ -2,7 +2,7 @@
 
 ## 0. Картинки не отображаются — быстрый фикс
 
-С локального ПК:
+Запуск из рабочего терминала:
 ```powershell
 .\scripts\fix-server-images-hoster.ps1
 ```
@@ -45,7 +45,7 @@ cd ~/komissionka
 pm2 restart komissionka agent bot
 ```
 
-Или через deploy-скрипт с локального ПК:
+Или через deploy-скрипт:
 ```powershell
 .\scripts\deploy-hoster.ps1 -Restart
 ```
@@ -57,7 +57,7 @@ cd ~/komissionka
 npx prisma studio --browser none
 ```
 
-На сервере без GUI обязательно `--browser none`, иначе Prisma упадёт с ошибкой `xdg-open ENOENT`. Порт будет указан в выводе (например 51212). Для доступа с локального компьютера: `ssh -L 5555:localhost:51212 hoster`, затем откройте http://localhost:5555 в браузере. Проверьте `items` — есть ли записи.
+На сервере без GUI обязательно `--browser none`, иначе Prisma упадёт с ошибкой `xdg-open ENOENT`. Порт будет указан в выводе (например 51212). Для доступа из внешнего браузера: `ssh -L 5555:localhost:51212 hoster`, затем откройте http://localhost:5555. Проверьте `items` — есть ли записи.
 
 ## 5. Логи
 

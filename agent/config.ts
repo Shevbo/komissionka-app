@@ -113,7 +113,7 @@ export function getConfig(): AgentConfig {
         ? envBool("AGENT_DEBUG")
         : (file.debug as boolean | undefined) ?? false,
     // Ключ LLM по умолчанию: AGENT_LLM_API_KEY (для Google Gemini / совместимого API)
-    // либо значение из config.json (для локальной разработки).
+    // либо значение из config.json (для dev-контура).
     llmApiKey:
       process.env.AGENT_LLM_API_KEY ??
       (file.llmApiKey as string | undefined),

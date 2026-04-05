@@ -3,6 +3,10 @@ import { unstable_noStore } from "next/cache";
 import { Button } from "komiss/components/ui/button";
 import { HomeCatalogSection } from "komiss/components/HomeCatalogSection";
 import { NewsBanner } from "komiss/components/NewsBanner";
+import {
+  heroDerivativePath,
+  parseHeroResponsiveStem,
+} from "komiss/lib/hero-image";
 import { Star } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -80,6 +84,7 @@ export default async function Home() {
   const catalogTextFontPx = (settings as { catalog_text_font_px?: number }).catalog_text_font_px ?? 14;
   const heroImageUrl =
     settings.hero_image_url?.trim() ? settings.hero_image_url : null;
+  const heroResponsive = parseHeroResponsiveStem(heroImageUrl);
 
   return (
     <div className="min-h-screen bg-white">
@@ -90,16 +95,31 @@ export default async function Home() {
           style={{ height: `${hBanner}px` }}
           aria-label="Главный баннер"
         >
-          {heroImageUrl && (
-            <div
-              className="absolute inset-0 z-0 w-full rounded-2xl"
-              style={{
-                backgroundImage: `url("${heroImageUrl}")`,
-                backgroundSize: "cover",
-                backgroundPosition: "center",
-              }}
+          {heroResponsive ? (
+            // eslint-disable-next-line @next/next/no-img-element -- hero fill + srcset (viewport / DPR / connection hints)
+            <img
+              src={heroDerivativePath(heroResponsive.stem, 1280)}
+              srcSet={`${heroDerivativePath(heroResponsive.stem, 768)} 768w, ${heroDerivativePath(heroResponsive.stem, 1280)} 1280w, ${heroDerivativePath(heroResponsive.stem, 1920)} 1920w`}
+              sizes="100vw"
+              alt=""
+              className="absolute inset-0 z-0 h-full w-full rounded-2xl object-cover"
+              loading="eager"
+              decoding="async"
+              fetchPriority="high"
               aria-hidden
             />
+          ) : (
+            heroImageUrl && (
+              <div
+                className="absolute inset-0 z-0 w-full rounded-2xl"
+                style={{
+                  backgroundImage: `url("${heroImageUrl}")`,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                }}
+                aria-hidden
+              />
+            )
           )}
           <div
             className="absolute inset-0 z-[1] rounded-2xl bg-black/40"

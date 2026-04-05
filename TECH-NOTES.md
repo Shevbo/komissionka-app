@@ -384,9 +384,10 @@
   - странности с обновлением сессии после логина/логаута.
 - Решения:
   - жёсткое требование HTTPS для домена `komissionka92.ru` (см. `docs/manual/app-komissionka.md`, раздел про HTTPS);
-  - настройки `NEXTAUTH_URL` и `APP_BASE_URL` на `https://komissionka92.ru`;
+  - настройки `NEXTAUTH_URL` и `APP_BASE_URL` на `https://komissionka92.ru` (не `http://` на проде);
   - в UI логина — принудительное `window.location.href` после успешного входа для обновления состояния на клиенте;
-  - `trustHost` для корректной работы за reverse‑proxy (Nginx).
+  - за nginx: **`AUTH_TRUST_HOST=true`** в `.env` (NextAuth v4 читает эту переменную в `detect-origin`, не `NEXTAUTH_TRUST_HOST`);
+  - Let's Encrypt: в SAN сертификата должны быть и `komissionka92.ru`, и `www.komissionka92.ru`, иначе антивирусы/браузеры ругаются на имя сертификата.
 
 ### 5.5 Prisma Studio и доступ к БД
 
@@ -394,7 +395,7 @@
   - при открытии Prisma Studio в новой вкладке пользователя выбрасывало на главную из‑за того, что профиль ещё не был загружен, и роль считалась `null`.
 - Решение:
   - до загрузки профиля не выполнять редирект на `/`, а дождаться результата запроса профиля;
-  - встроить Prisma Studio в админку (`/admin/prisma-studio`) с проверкой роли admin и без запроса пароля БД.
+  - Prisma Studio: `/admin/prisma-studio` (вход с ролью admin); ссылка с портала shectory.ru в карточке проекта.
 
 ### 5.6 Deploy и скрипты
 

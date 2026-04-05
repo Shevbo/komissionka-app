@@ -28,7 +28,9 @@ module.exports = {
       args: "tsx telegram-bot/bot.ts",
       cwd: __dirname,
       max_memory_restart: "200M",
-      env: { NODE_OPTIONS: "--max-old-space-size=192", TZ: "Europe/Moscow" },
+      exp_backoff_restart_delay: 1000,
+      max_restarts: 30,
+      env: { NODE_OPTIONS: "--max-old-space-size=192 --no-deprecation", TZ: "Europe/Moscow" },
     },
     {
       name: "deploy-worker",

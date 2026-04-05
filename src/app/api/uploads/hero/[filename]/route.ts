@@ -10,6 +10,7 @@ const EXT_TYPES: Record<string, string> = {
   jpeg: "image/jpeg",
   gif: "image/gif",
   webp: "image/webp",
+  avif: "image/avif",
 };
 
 export async function GET(

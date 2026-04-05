@@ -54,7 +54,8 @@ src/
 
 | Элемент | Файл | Описание |
 |---------|------|----------|
-| NextAuth config | [src/lib/auth.ts](../src/lib/auth.ts) | `authOptions`, Credentials Provider, bcrypt, JWT |
+| NextAuth config | [src/lib/auth.ts](../src/lib/auth.ts) | При заданном `SHECTORY_AUTH_BRIDGE_SECRET` вход **только** через каталог портала (локальный `encrypted_password` не проверяется и при успешном входе с портала сбрасывается). Без секрета — только bcrypt в `users`. |
+| Мост портала | [src/lib/shectory-portal-auth.ts](../src/lib/shectory-portal-auth.ts), [src/lib/map-portal-role.ts](../src/lib/map-portal-role.ts) | Тот же секрет, что в `.env` Shectory Portal на VDS |
 | API route | [src/app/api/auth/[...nextauth]/route.ts](../src/app/api/auth/[...nextauth]/route.ts) | Обработчик NextAuth |
 | Регистрация | [src/app/api/auth/signup/route.ts](../src/app/api/auth/signup/route.ts) | Создание `users` + `profiles` в транзакции |
 | API профиля | [src/app/api/auth/profile/route.ts](../src/app/api/auth/profile/route.ts) | `GET` — данные профиля, `PATCH` — обновление контактных данных и email, `DELETE` — полное удаление профиля |
@@ -199,9 +200,13 @@ psql "$DATABASE_URL"
 
 ### 5.3 Prisma Studio
 
-**Встроенный Prisma Studio в админке** (рекомендуется)
+**С портала Shectory** (рекомендуется для навигации)
 
-В панели управления («Админ. Консоль») нажмите кнопку **Prisma Studio** — откроется новая вкладка с просмотром и редактированием таблиц БД. Доступ по сессии администратора (ввод пароля БД не требуется). Страница: `/admin/prisma-studio`, API: `/api/admin/studio`.
+На [shectory.ru](https://shectory.ru) откройте карточку проекта **Комиссионка** → **Панель управления** или блок workspace: ссылка **Prisma Studio** ведёт на `https://komissionka92.ru/admin/prisma-studio` (метаданные `registryMetaJson.devtools.prismaStudioUrl`). Доступ по сессии администратора Комиссионки. Кнопка убрана из шапки внутренней админки, чтобы не дублировать вход.
+
+**Прямая ссылка**
+
+Страница: `/admin/prisma-studio`, API: `/api/admin/studio`.
 
 **Prisma Studio через CLI** (альтернатива)
 
@@ -218,9 +223,9 @@ npx prisma studio --browser none
 В выводе будет строка вида: `Prisma Studio is running at: http://localhost:51212`  
 Порт может быть другим (5555, 51212 и т.д.) — запомните его.
 
-**Шаг 2. SSH-туннель с локального компьютера**
+**Шаг 2. SSH-туннель с клиентской машины**
 
-В **новом** терминале на вашем компьютере (не на сервере):
+В **новом** клиентском терминале (не на сервере):
 
 ```bash
 ssh -L 5555:localhost:51212 hoster
@@ -230,7 +235,7 @@ ssh -L 5555:localhost:51212 hoster
 
 **Шаг 3. Открытие в браузере**
 
-Откройте на локальном компьютере: **http://localhost:5555**
+Откройте в браузере: **http://localhost:5555**
 
 Prisma Studio будет доступен в браузере через туннель.
 
@@ -251,12 +256,22 @@ npx prisma migrate dev      # dev (не используется на серве
 
 Для доступа к личному кабинету (ЛК) на сайте komissionka92.ru требуется HTTPS. Без HTTPS NextAuth и cookies могут работать некорректно.
 
+**Ошибка антивируса / браузера: «недопустимое имя сертификата» (Kaspersky и др.)**  
+Чаще всего сертификат выпущен только для `komissionka92.ru`, а открывают `https://www.komissionka92.ru`, или наоборот. В сертификате в поле **Subject Alternative Name** должны быть **оба** имени. Перевыпустите:
+
+`sudo certbot certonly --nginx -d komissionka92.ru -d www.komissionka92.ru`  
+(или `sudo certbot --nginx -d komissionka92.ru -d www.komissionka92.ru`)
+
+После этого в nginx держите редирект **www → без www** и канонический URL в `.env` **`https://komissionka92.ru`** — шаблон: [scripts/nginx-komissionka92.https.conf](../../scripts/nginx-komissionka92.https.conf).
+
 **Шаги настройки HTTPS (Nginx + Certbot):**
 
 1. Установить certbot: `sudo apt install certbot python3-certbot-nginx`
-2. Получить сертификат: `sudo certbot --nginx -d komissionka92.ru`
-3. Обновить `.env`: `NEXTAUTH_URL=https://komissionka92.ru`, `APP_BASE_URL=https://komissionka92.ru`
+2. Получить сертификат **на оба хоста**: `sudo certbot --nginx -d komissionka92.ru -d www.komissionka92.ru`
+3. Обновить `.env`: `NEXTAUTH_URL=https://komissionka92.ru`, `APP_BASE_URL=https://komissionka92.ru`, **`AUTH_TRUST_HOST=true`** (NextAuth v4 за reverse-proxy читает именно **`AUTH_TRUST_HOST`**, не `NEXTAUTH_TRUST_HOST`).
 4. Перезапустить: `pm2 restart komissionka agent bot`
+
+**Вход не работает при HTTPS:** проверьте, что в `.env` нет `NEXTAUTH_URL=http://...` — должен быть **`https://komissionka92.ru`** без завершающего слэша, иначе сессионные cookie и редиректы NextAuth расходятся с реальным протоколом.
 
 Подробности деплоя: [docs/HOSTER-RU-DEPLOY.md](../HOSTER-RU-DEPLOY.md).
 
@@ -279,10 +294,10 @@ npx prisma migrate dev      # dev (не используется на серве
 
 **Этапы (актуальный поток):**
 
-1. **Разработка** — правки в `src/`, `prisma/`, `public/`. Локальная разработка заморожена; изменения вносятся в репозитории (локально и/или на сервере), но источником правды служит GitHub.
+1. **Разработка** — правки в `src/`, `prisma/`, `public/` в серверном контуре. Источник правды — GitHub.
 2. **Версионирование** — обновление `version.json` (app), блок UPDATE в корневом `what's new.md`.
-3. **Коммит + push** — `git commit` и `git push origin main` из каталога `c:\komissionka`.
-4. **Git-деплой** — на локальной машине: `.\scripts\deploy-hoster-git.ps1 -Branch main`.  
+3. **Коммит + push** — `git commit` и `git push origin main` из рабочего репозитория.
+4. **Git-деплой** — через `./scripts/deploy-hoster-git.ps1 -Branch main`.  
    Скрипт делает `git push origin main` и **добавляет задачу в очередь** (POST `/api/deploy/queue`). Задачу обрабатывает **deploy-worker**: запускает `scripts/env-deploy.sh prod main` в `~/komissionka` (fetch, reset, npm ci, prisma, build, pm2 restart). Правки на проде появляются после обработки очереди (1–5 мин). Деплой разрешён только через очередь; прямой SSH из скрипта отключён.
 5. **Старый скрипт `deploy-hoster.ps1`** — только как резервный вариант (scp/rsync) при проблемах с git-деплоем.
 
@@ -295,7 +310,7 @@ npx prisma migrate dev      # dev (не используется на серве
 | Публичные статические файлы | `public/` |
 | Конфигурация | `next.config.ts`, `package.json` |
 
-Корень репозитория: каталог с `package.json` (локально: `c:\komissionka` или серверная копия).
+Корень репозитория: каталог с `package.json` (серверная рабочая копия).
 
 ### 7.3 Целевое расположение на сервере (Prod)
 
