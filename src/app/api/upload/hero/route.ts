@@ -32,7 +32,18 @@ export async function POST(request: Request) {
   if (profile?.role !== "admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const formData = await request.formData();
+  let formData: FormData;
+  try {
+    formData = await request.formData();
+  } catch {
+    return NextResponse.json(
+      {
+        error:
+          "Не удалось разобрать multipart (часто лимит nginx 1m: задайте client_max_body_size 40m).",
+      },
+      { status: 400 }
+    );
+  }
   const file = formData.get("file") as File | null;
   if (!file || !file.size) {
     return NextResponse.json({ error: "file required" }, { status: 400 });

@@ -747,16 +747,26 @@ export default function AdminPage() {
         formData.append("file", heroImageFile);
         const uploadRes = await fetch("/api/upload/hero", { method: "POST", body: formData });
         if (!uploadRes.ok) {
+          const raw = await uploadRes.text();
           let msg = "Ошибка загрузки изображения";
           try {
-            const j = (await uploadRes.json()) as { error?: string };
+            const j = JSON.parse(raw) as { error?: string };
             if (j?.error) msg = j.error;
           } catch {
-            /* ignore */
+            if (uploadRes.status === 413) {
+              msg =
+                "Файл слишком большой для прокси (nginx). На сервере нужен client_max_body_size 40m; см. scripts/nginx-komissionka92.https.conf.";
+            } else if (uploadRes.status === 504 || uploadRes.status === 502) {
+              msg = "Таймаут при загрузке или обработке. Попробуйте чуть меньшее изображение.";
+            } else if (raw.length > 0 && raw.length < 400 && !raw.trim().startsWith("<")) {
+              msg = raw.trim();
+            } else {
+              msg = `${msg} (HTTP ${uploadRes.status})`;
+            }
           }
           throw new Error(msg);
         }
-        const uploadData = await uploadRes.json();
+        const uploadData = JSON.parse(await uploadRes.text()) as { url?: string };
         hero_image_url = uploadData.url ?? hero_image_url;
         setHeroImageFile(null);
         setHeroPreviewKey(Date.now());
